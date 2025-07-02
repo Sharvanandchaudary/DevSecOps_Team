@@ -1,0 +1,25 @@
+name: DevSecOps Team Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  pre_chamber_deployment:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the current repo (DevSecOps_Team)
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          path: OnCloud_IaC_Github_Actions
+
+      - name: Get changed files in CC directory
+        run: |
+          cd OnCloud_IaC_Github_Actions
+          git diff --name-only HEAD~1..HEAD > changed_files.txt
+          cat changed_files.txt
+          list=$(cat changed_files.txt | tr '\n' ',')
+          echo "added=$list" >> $GITHUB_ENV

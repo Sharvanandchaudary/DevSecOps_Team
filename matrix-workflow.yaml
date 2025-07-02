@@ -1,140 +1,176 @@
 name: Terragrunt CLI flow
+
 on:
   push:
     branches:
       - Release_dev
     paths:
       - 'CustomerVPC/terraform/config/envs/*prod/*/**'
- 
-  workflow_dispatch:
 
+  workflow_dispatch:
 
 jobs:
 
-  pre_chamber_deployment:
-    runs-on: cloud30-docker-mvp
+  detect-changes:
+    runs-on: ubuntu-latest
     outputs:
-       rname: ${{ steps.step1.outputs.ccid }}
-       cc_chamber_chdir: ${{ steps.step2.outputs.cc_chamber_path }}
-       cc_changed_files: ${{ steps.step2.outputs.cc_added_files }}
-       env_name: ${{ steps.step2.outputs.en_name }}
-       cc_id: ${{ steps.step1.outputs.cc_chamber_id }}
+      dirs: ${{ steps.set-matrix.outputs.dirs }}
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.REPO_TOKEN }}
-   
-    - name: Checkout the files
-      uses: actions/checkout@v3
-      with:
-        repository: IT/OnCloud_IaC_Github_Actions
-        path: ./OnCloud_IaC_Github_Actions
-        token: ${{ secrets.REPO_TOKEN }}
-  
-    - name: Setup Git Credentials
-      uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
-      with:
-        credentials: ${{ secrets.GIT_CREDENTIALS }}
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_TOKEN }}
 
-    - name: Checkout the files
-      uses: actions/checkout@v3
-      with:
-        repository: IT/terraform-cadencecld-openstack
-        path: ./terraform-cadencecld-openstack
-        token: ${{ secrets.REPO_TOKEN }} 
-        fetch-depth: 0 
-          
-    - name: Get CC changed files
-      run: |
-        cd ./terraform-cadencecld-openstack
-        git diff --name-only HEAD~1..HEAD > changed_files.txt
-        cat changed_files.txt
-        list=$(cat changed_files.txt | tr '\n' ',')
-        echo "added=$list" >> $GITHUB_ENV
-    
-    - name: Get AWS changed files
-      id: files
-      uses: ./OnCloud_IaC_Github_Actions/.github/actions/gh-action-get-changed-files-master
-      with:          
-        token: ${{ secrets.REPO_TOKEN }}    
-       
-    - name: AWS files were added
-      if: ${{ contains(steps.files.outputs.added, '*.tfvars.json') || contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.added, 'delete_chamber') }}
-      run: |
-        echo "chdir=$(echo "${{ steps.files.outputs.added }}" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
-        
-    - name:  AWS files were modified
-      if: ${{ contains(steps.files.outputs.modified, '*.tfvars.json') || contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.modified, 'delete_chamber') }} 
-      run: |
-        echo "chdir=$(echo "${{ steps.files.outputs.modified }}" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
-         
-    - name: CC files were added or modified
-      if: ${{ contains(env.added, '*.tfvars.json') || contains(env.added, 'add_chamber') || contains(env.added, 'delete_chamber') }}
-      run: |
-        echo "cc_chdir=$(echo "${{ env.added }}" | tr -d ' ' | awk -v FS=',' '{for(i=1;i<=NF;i++) if ($i ~ /add_chamber$/ || $i ~ /delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-8 )" >> $GITHUB_ENV
-        
-    
-    - id:  step1
-      if: ${{ env.chdir != '' }}
-      run: |
-        cd ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
-        env_file=$(ls *.tfvars.json | grep -E '^[a-zA-Z]+[0-9]+\.tfvars\.json$')
-        echo "Found TF var json file: $env_file"
-        deploy_type=$(jq -r '.settings.deployment_type' $env_file )
-        echo "depoy_env=$(jq -r '.tags.Environment' $env_file )" >> $GITHUB_ENV
-        echo "cc_env_value=$( [ "$(jq -r '.tags.Environment' $env_file )" = "Production" ] && echo "prod" || echo "non-prod" )" >> $GITHUB_ENV
-        echo "cc_cham=$(jq -r '.settings.cc_chamber' $env_file )" >> $GITHUB_ENV
-        echo "cc_env=$(jq -r '.settings.cc_env' $env_file )" >> $GITHUB_ENV
-        cc_ch=$(jq -r '.settings.cc_chamber' $env_file )
-        echo "::set-output name=ccid::$(echo $deploy_type)"
-        echo "::set-output name=cc_chamber_id::$(echo $cc_ch)"
-        
-        
-    
-    - id:  step2
-      if: ${{ env.cc_chdir != '' }}
-      run: |
-        echo "cc_chamber_path=$cc_chdir" >> $GITHUB_OUTPUT
-        echo "cc_added_files=$added" >> $GITHUB_OUTPUT
-        env_field=$(echo "$cc_chdir" | cut -d '/' -f 2)
-        env_osc=$(echo "$cc_chdir" | cut -d '/' -f 3)
-        if [ "$env_field" == "qa" ]; then
-          echo "en_name=test" >> "$GITHUB_OUTPUT"
-        elif [[ "$env_field" == "dev" ]]; then
-                echo "en_name=dev" >> "$GITHUB_OUTPUT"
-        elif [[ "$env_field" == "stage" ]]; then
-                echo "en_name=stage" >> "$GITHUB_OUTPUT"
-        elif [[ "$env_field" == "prod" && "$env_osc" == "prod-1" ]]; then
-                echo "en_name=prod" >> "$GITHUB_OUTPUT"
-        elif [[ "$env_field" == "prod" && "$env_osc" == "prod-2" ]]; then
-                echo "en_name=prod2" >> "$GITHUB_OUTPUT"
-        else
-                echo "no env details found"
-        fi
+      - name: Get changed files
+        id: changed
+        run: |
+          git fetch origin ${{ github.event.before }}
+          files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -E 'add_chamber|delete_chamber|\.tfvars\.json$' || true)
+          dirs=$(echo "$files" | awk -F'/' '{print $5"/"$6"/"$7}' | sort | uniq | jq -R -s -c 'split("\n")[:-1]')
+          echo "dirs=$dirs"
+          echo "dirs=$dirs" >> $GITHUB_OUTPUT
+
+      - name: Set matrix
+        id: set-matrix
+        run: echo "dirs=${{ steps.changed.outputs.dirs }}" >> $GITHUB_OUTPUT
+
+  pre_chamber_deployment:
+    needs: detect-changes
+    runs-on: cloud30-docker-mvp
+    strategy:
+      matrix:
+        chdir: ${{ fromJson(needs.detect-changes.outputs.dirs) }}
+    outputs:
+      rname: ${{ steps.step1.outputs.ccid }}
+      cc_chamber_chdir: ${{ steps.step2.outputs.cc_chamber_path }}
+      cc_changed_files: ${{ steps.step2.outputs.cc_added_files }}
+      env_name: ${{ steps.step2.outputs.en_name }}
+      cc_id: ${{ steps.step1.outputs.cc_chamber_id }}
+    env:
+      chdir: ${{ matrix.chdir }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Checkout GitHub Actions code
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Setup Git Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+        with:
+          credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+      - name: Checkout OpenStack Repo
+        uses: actions/checkout@v3
+        with:
+          repository: IT/terraform-cadencecld-openstack
+          path: ./terraform-cadencecld-openstack
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Get CC changed files
+        run: |
+          cd ./terraform-cadencecld-openstack
+          git diff --name-only HEAD~1..HEAD > changed_files.txt
+          list=$(cat changed_files.txt | tr '\n' ',')
+          echo "added=$list" >> $GITHUB_ENV
+
+      - name: Get AWS changed files
+        id: files
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/gh-action-get-changed-files-master
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: AWS files were added
+        if: ${{ contains(steps.files.outputs.added, '*.tfvars.json') || contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.added, 'delete_chamber') }}
+        run: |
+          echo "chdir=${{ env.chdir }}" >> $GITHUB_ENV
+
+      - name: AWS files were modified
+        if: ${{ contains(steps.files.outputs.modified, '*.tfvars.json') || contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.modified, 'delete_chamber') }}
+        run: |
+          echo "chdir=${{ env.chdir }}" >> $GITHUB_ENV
+
+      - name: CC files were added or modified
+        if: ${{ contains(env.added, '*.tfvars.json') || contains(env.added, 'add_chamber') || contains(env.added, 'delete_chamber') }}
+        run: |
+          echo "cc_chdir=${{ env.chdir }}" >> $GITHUB_ENV
+
+      - id: step1
+        run: |
+          cd CustomerVPC/terraform/config/envs/${{ env.chdir }}
+          env_file=$(ls *.tfvars.json | grep -E '^[a-zA-Z]+[0-9]+\.tfvars\.json$')
+          echo "Found TF var json file: $env_file"
+          deploy_type=$(jq -r '.settings.deployment_type' $env_file )
+          echo "depoy_env=$(jq -r '.tags.Environment' $env_file )" >> $GITHUB_ENV
+          echo "cc_env_value=$( [ "$(jq -r '.tags.Environment' $env_file )" = "Production" ] && echo "prod" || echo "non-prod" )" >> $GITHUB_ENV
+          echo "cc_cham=$(jq -r '.settings.cc_chamber' $env_file )" >> $GITHUB_ENV
+          echo "cc_env=$(jq -r '.settings.cc_env' $env_file )" >> $GITHUB_ENV
+          cc_ch=$(jq -r '.settings.cc_chamber' $env_file )
+          echo "::set-output name=ccid::$(echo $deploy_type)"
+          echo "::set-output name=cc_chamber_id::$(echo $cc_ch)"
+
+      - id: step2
+        run: |
+          echo "cc_chamber_path=${{ env.chdir }}" >> $GITHUB_OUTPUT
+          echo "cc_added_files=${{ env.added }}" >> $GITHUB_OUTPUT
+          env_field=$(echo "${{ env.chdir }}" | cut -d '/' -f 1)
+          env_osc=$(echo "${{ env.chdir }}" | cut -d '/' -f 2)
+          if [ "$env_field" == "qa" ]; then
+            echo "en_name=test" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "dev" ]]; then
+            echo "en_name=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "stage" ]]; then
+            echo "en_name=stage" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "prod" && "$env_osc" == "prod-1" ]]; then
+            echo "en_name=prod" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "prod" && "$env_osc" == "prod-2" ]]; then
+            echo "en_name=prod2" >> "$GITHUB_OUTPUT"
+          else
+            echo "no env details found"
+          fi
+  
 
   aws_chamber_deployment:
-    runs-on: cloud30-docker-mvp
-    needs: pre_chamber_deployment
-    if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp-cc' || needs.pre_chamber_deployment.outputs.rname == 'mvp' }} 
-    outputs:
-      del_chamber_path: ${{ steps.step1.outputs.aws_del_chamber }}
-    steps:
+  runs-on: cloud30-docker-mvp
+  needs: pre_chamber_deployment
+  if: >
+    ${{
+      contains(fromJson(needs.pre_chamber_deployment.outputs.rname || '[]'), 'mvp-cc') ||
+      contains(fromJson(needs.pre_chamber_deployment.outputs.rname || '[]'), 'mvp')
+    }}
+  strategy:
+    matrix:
+      include: 
+        - chdir: ${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+          rname: ${{ needs.pre_chamber_deployment.outputs.rname }}
+  env:
+    chdir: ${{ matrix.chdir }}
+  outputs:
+    del_chamber_path: ${{ steps.step1.outputs.aws_del_chamber }}
+  steps:
+
     - name: Checkout code
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
         token: ${{ secrets.REPO_TOKEN }}
-    
-   
+
     - name: Checkout the files
       uses: actions/checkout@v3
       with:
         repository: IT/OnCloud_IaC_Github_Actions
         path: ./OnCloud_IaC_Github_Actions
         token: ${{ secrets.REPO_TOKEN }}
-  
+
     - name: Setup Git Credentials
       uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
       with:
@@ -143,18 +179,19 @@ jobs:
     - name: Get changed files
       id: files
       uses: ./OnCloud_IaC_Github_Actions/.github/actions/gh-action-get-changed-files-master
-      with:          
+      with:
         token: ${{ secrets.REPO_TOKEN }}
-   
-    - name: files were added
+
+    - name: Files were added
       if: ${{ contains(steps.files.outputs.added, '*.tfvars.json') || contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.added, 'delete_chamber') }}
       run: |
         echo "chdir=$(echo "${{ steps.files.outputs.added }}" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
-        
-    - name:  files was modified
-      if: ${{ contains(steps.files.outputs.modified, '*.tfvars.json') || contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.modified, 'delete_chamber') }} 
+
+    - name: Files were modified
+      if: ${{ contains(steps.files.outputs.modified, '*.tfvars.json') || contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.modified, 'delete_chamber') }}
       run: |
         echo "chdir=$(echo "${{ steps.files.outputs.modified }}" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
+
     - name: Configure AWS credentials
       uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
       with:
@@ -169,49 +206,73 @@ jobs:
 
     - name: Terragrunt Plan
       if: ${{ contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.modified, 'add_chamber') }}
-      run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin plan
+      run: |
+        /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin plan
       working-directory: ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
-    
+
     - name: Terragrunt Apply
-      if: ${{ success() && !(contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber'))  && (contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.added, 'add_chamber')) }}
-      run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
+      if: >
+        ${{
+          success() &&
+          !(contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber')) &&
+          (contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.added, 'add_chamber'))
+        }}
+      run: |
+        /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
       working-directory: ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
-   
+
     - name: Terragrunt Destroy
-      if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp' && ( contains(steps.files.outputs.added, 'delete_chamber')  || contains(steps.files.outputs.modified, 'delete_chamber') )}} 
+      if: >
+        ${{
+          matrix.rname == 'mvp' &&
+          (contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber'))
+        }}
       run: |
         /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin destroy -auto-approve
       working-directory: ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
-    
+
     - id: step1
-      if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp-cc' && ( contains(steps.files.outputs.added, 'delete_chamber')  || contains(steps.files.outputs.modified, 'delete_chamber') )}} 
+      if: >
+        ${{
+          matrix.rname == 'mvp-cc' &&
+          (contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber'))
+        }}
       run: |
-         del_chdir=$(echo "${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}")
-         echo "aws_del_chamber=$del_chdir" >> $GITHUB_OUTPUT
- 
+        del_chdir="${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}"
+        echo "aws_del_chamber=$del_chdir" >> $GITHUB_OUTPUT
 
   openstack_chamber_deployment:
-    runs-on: cloud30-docker-mvp 
-    needs: [ pre_chamber_deployment,aws_chamber_deployment ]
-    if: ${{needs.pre_chamber_deployment.outputs.rname == 'mvp-cc'}}
-    environment: ${{needs.pre_chamber_deployment.outputs.env_name}}
+    runs-on: cloud30-docker-mvp
+    needs: [pre_chamber_deployment, aws_chamber_deployment]
+    if: success()
+    strategy:
+      matrix:
+        include:
+          - cc_chamber_chdir: ${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+            cc_changed_files: ${{ needs.pre_chamber_deployment.outputs.cc_changed_files }}
+            env_name: ${{ needs.pre_chamber_deployment.outputs.env_name }}
+            cc_id: ${{ needs.pre_chamber_deployment.outputs.cc_id }}
+            rname: ${{ needs.pre_chamber_deployment.outputs.rname }}
+    if: ${{ matrix.rname == 'mvp-cc' }}
+    environment: ${{ matrix.env_name }}
     env:
-      OS_AUTH_URL: ${{ secrets[format('OS_AUTH_URL_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
-      OS_USERNAME: ${{ secrets[format('OS_USERNAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
-      OS_PASSWORD: ${{ secrets[format('OS_PASSWORD_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
-      OS_PROJECT_NAME: ${{ secrets[format('OS_PROJECT_NAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
-      OS_USER_DOMAIN_NAME: ${{ secrets[format('OS_USER_DOMAIN_NAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
-      OS_COMPUTE_URL: ${{ secrets[format('OS_COMPUTE_URL_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
-      cc_id: ${{ needs.pre_chamber_deployment.outputs.cc_id }}
+      OS_AUTH_URL: ${{ secrets[format('OS_AUTH_URL_{0}', matrix.env_name)] }}
+      OS_USERNAME: ${{ secrets[format('OS_USERNAME_{0}', matrix.env_name)] }}
+      OS_PASSWORD: ${{ secrets[format('OS_PASSWORD_{0}', matrix.env_name)] }}
+      OS_PROJECT_NAME: ${{ secrets[format('OS_PROJECT_NAME_{0}', matrix.env_name)] }}
+      OS_USER_DOMAIN_NAME: ${{ secrets[format('OS_USER_DOMAIN_NAME_{0}', matrix.env_name)] }}
+      OS_COMPUTE_URL: ${{ secrets[format('OS_COMPUTE_URL_{0}', matrix.env_name)] }}
+      cc_id: ${{ matrix.cc_id }}
       TF_CLI_CONFIG_FILE: ${{ secrets.TF_CLI_CONFIG_FILE }}
-    steps:
+
+  steps:
     - name: Checkout code
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
         token: ${{ secrets.REPO_TOKEN }}
-   
-    - name: Checkout the files
+
+    - name: Checkout OnCloud files
       uses: actions/checkout@v3
       with:
         repository: IT/OnCloud_IaC_Github_Actions
@@ -230,136 +291,266 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
 
-    - name: Checkout the files
+    - name: Checkout terraform-cadencecld-openstack
       uses: actions/checkout@v3
       with:
         repository: IT/terraform-cadencecld-openstack
         path: ./terraform-cadencecld-openstack
-        token: ${{ secrets.REPO_TOKEN }} 
-        fetch-depth: 0    
-    
-        
+        token: ${{ secrets.REPO_TOKEN }}
+        fetch-depth: 0
+
     - name: Setup Terraform
       uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-terraform-main
       with:
         terraform_version: 1.5.7
 
     - name: Terragrunt Plan
-      if: ${{ contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'add_chamber') }}
-      run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin plan
-      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
-    
-     
+      if: ${{ contains(matrix.cc_changed_files, 'add_chamber') }}
+      run: |
+        /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin plan
+      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ matrix.cc_chamber_chdir }}
+
     - name: Terragrunt Apply
       id: tf_apply
       continue-on-error: true
-      if: ${{ success() &&  !contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'delete_chamber')  && contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'add_chamber') }}
-      run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
-      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs//${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
-    
-   # - name: Wait for OpenStack VMs Reboot Approval
-   #   uses: ./OnCloud_IaC_Github_Actions/.github/actions/approval-action-main
-   #   with:
-   #     approvers: "srinip"
-   #     token: ${{ secrets.REPO_TOKEN }}
-   #     issueTitle: "tf approval"
-   #     issueBody: "Tf approval request pending"
-   #     approveWords: 'apply,approve, approved,destroy'
-   #     rejectWords: 'deny, denied, reject, rejected'
-   #     issueLabels: 'ManualApproval,ApprovalAction'
-   #     waitInterval: '1'
-   #     waitTimeout: '60'
-   #     minimumApprovals: '1'
-    
+      if: ${{ success() && !contains(matrix.cc_changed_files, 'delete_chamber') && contains(matrix.cc_changed_files, 'add_chamber') }}
+      run: |
+        /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
+      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ matrix.cc_chamber_chdir }}
+
     - name: Reboot VMs
       id: reboot_vm
       if: ${{ steps.tf_apply.outcome == 'failure' }}
       run: |
-          json_auth_data='{
-            "auth":{
-              "identity":{
-                 "methods":["password"],
-                 "password": { 
-                   "user": { 
-                     "name": "${{ env.OS_USERNAME }}", 
-                     "domain": { "id": "default" }, 
-                     "password": "${{ env.OS_PASSWORD }}"
-                   }
-                 }
+        json_auth_data='{
+          "auth":{
+            "identity":{
+              "methods":["password"],
+              "password": {
+                "user": {
+                  "name": "${{ env.OS_USERNAME }}",
+                  "domain": { "id": "default" },
+                  "password": "${{ env.OS_PASSWORD }}"
+                }
               }
             }
-          }'
-          OS_AUTH_TOKEN=$(curl -is -X POST -H "Content-Type: application/json" ${{ env.OS_AUTH_URL }}/v3/auth/tokens \
-           -d "$json_auth_data" | grep -i '^x-subject-token' | cut -d' ' -f2 | tr -d '\r')
-          vm_list=$(curl -s -X GET -H "X-Auth-Token: $OS_AUTH_TOKEN"  -H "Content-Type: application/json" \
-           "${{ env.OS_COMPUTE_URL }}/servers?all_tenants=True&name=${{ env.cc_id }}" | jq -r '.servers[] | .id')
-          echo "vm_list= $vm_list"
-          vm_list_count=`echo -e $vm_list | tr ' ' '\n' | wc -l | xargs`
-          json_data='{
-            "reboot":{
-              "type":"HARD"
-            }
-          }'
-          echo "json_date=$json_data"
-          echo -e $vm_list | tr ' ' '\n' | while read i; do curl -s -X POST -H "X-Auth-Token: $OS_AUTH_TOKEN" \
-           -H "Content-Type: application/json" "${{ env.OS_COMPUTE_URL }}/servers/$i/action" \
-           -d "$json_data"; echo "$i is rebooted"; done
-          vm_running=0
-          echo "vm_running = $vm_running, vm_list_count=$vm_list_count"
-          while [ "$vm_running" != "$vm_list_count" ]; do
-            echo "wait....60 seconds"
-            sleep 60
-            vm_running=$(curl -s -X GET -H "X-Auth-Token: $OS_AUTH_TOKEN"  -H "Content-Type: application/json" \
-              "${{ env.OS_COMPUTE_URL }}/servers?all_tenants=True&name=${{ env.cc_id }}&status=ACTIVE" \
-              | jq '.servers | length')
-            echo "vm_running = $vm_running, vm_list_count=$vm_list_count"
-          done
-      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
-        
-    - name: Terragrunt Apply - Second
+          }
+        }'
+        OS_AUTH_TOKEN=$(curl -is -X POST -H "Content-Type: application/json" ${{ env.OS_AUTH_URL }}/v3/auth/tokens \
+         -d "$json_auth_data" | grep -i '^x-subject-token' | cut -d' ' -f2 | tr -d '\r')
+        vm_list=$(curl -s -X GET -H "X-Auth-Token: $OS_AUTH_TOKEN" -H "Content-Type: application/json" \
+         "${{ env.OS_COMPUTE_URL }}/servers?all_tenants=True&name=${{ env.cc_id }}" | jq -r '.servers[] | .id')
+        echo "VMs: $vm_list"
+        json_data='{ "reboot": { "type":"HARD" } }'
+        for vm in $vm_list; do
+          curl -s -X POST -H "X-Auth-Token: $OS_AUTH_TOKEN" -H "Content-Type: application/json" \
+            "${{ env.OS_COMPUTE_URL }}/servers/$vm/action" -d "$json_data"
+          echo "$vm rebooted"
+        done
+        echo "Waiting for all VMs to be ACTIVE..."
+        sleep 60
+        while true; do
+          vm_running=$(curl -s -X GET -H "X-Auth-Token: $OS_AUTH_TOKEN" -H "Content-Type: application/json" \
+            "${{ env.OS_COMPUTE_URL }}/servers?all_tenants=True&name=${{ env.cc_id }}&status=ACTIVE" \
+            | jq '.servers | length')
+          [ "$vm_running" -eq "$(echo $vm_list | wc -w)" ] && break
+          echo "Still waiting... $vm_running ready"
+          sleep 30
+        done
+      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ matrix.cc_chamber_chdir }}
+
+    - name: Terragrunt Apply - Second Attempt
       if: ${{ steps.tf_apply.outcome == 'failure' }}
-      run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
-      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs//${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
-    
+      run: |
+        /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
+      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ matrix.cc_chamber_chdir }}
+
     - name: Terragrunt CC Destroy
-      if: ${{ contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'delete_chamber') }}
+      if: ${{ contains(matrix.cc_changed_files, 'delete_chamber') }}
       run: |
         /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin destroy -auto-approve
-      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs//${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
-    
+      working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ matrix.cc_chamber_chdir }}
+
     - name: Terragrunt AWS Destroy
       if: ${{ needs.aws_chamber_deployment.outputs.del_chamber_path != '' }}
       run: |
         /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin destroy -auto-approve
       working-directory: ${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}
-    #  Commented out for the time, Since this only work for c4 account. Will enhance this logic
-    # - name: Terragrunt AWS Post Destroy
-    #   if: ${{ needs.aws_chamber_deployment.outputs.del_chamber_path != '' }}
-    #   run: |
-    #     cd ${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}
-    #     env_file=$(ls *.tfvars.json | grep -E '^[a-zA-Z]+[0-9]+\.tfvars\.json$')
-    #     echo "Found TF var json file: $env_file"
-    #     del_reg=$(jq -r '.region' $env_file)
-    #     del_env_name=$([[ "$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f10)" == "non-prod" ]] && echo "dev" || echo "prod")
-    #     bucket_prefix=$([[ "$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f10)" == "non-prod" ]] && echo "-dev" || echo "")
-    #     del_ch_json=$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f12)
-    #     del_ch_name=$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f12 |cut -c1-2)
-
-    #     # Retrieve the object's size
-
-    #     ##object_size=$(aws s3api head-object --bucket "cadencecloud-${del_env_name}-${del_reg}" --key "c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json" --query 'ContentLength' --output text)
-    #     object_size=$(aws s3api head-object --bucket "cadencecloud-${del_env_name}-${del_reg}" --key "c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json" --region "${del_reg}" --query 'ContentLength' --output text) || echo "Error: unable to retrieve object size"
 
 
-    #     # Check if the object size is zero
-    #     if [ "$object_size" -eq 0 ]; then
-    #         echo "Object ${del_ch_json}.json has zero size, skipping deletion."
-    #     else
-    #         # If the object size is not zero, delete it
-    #         aws s3 rm "s3://cadencecloud${bucket_prefix}-${del_reg}/c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json" --region "${del_reg}"
-    #         echo "s3://cadencecloud${bucket_prefix}-${del_reg}/c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json"
-    #     fi
 
-    #     sleep 180
-    #     echo "${del_ch_json}vpc_flow_log_cloudwatch_group"
-    #     aws logs delete-log-group --log-group-name ${del_ch_json}vpc_flow_log_cloudwatch_group --region "${del_reg}"
+
+
+  # openstack_chamber_deployment:
+  #   runs-on: cloud30-docker-mvp 
+  #   needs: [ pre_chamber_deployment,aws_chamber_deployment ]
+  #   if: ${{needs.pre_chamber_deployment.outputs.rname == 'mvp-cc'}}
+  #   environment: ${{needs.pre_chamber_deployment.outputs.env_name}}
+  #   env:
+  #     OS_AUTH_URL: ${{ secrets[format('OS_AUTH_URL_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+  #     OS_USERNAME: ${{ secrets[format('OS_USERNAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+  #     OS_PASSWORD: ${{ secrets[format('OS_PASSWORD_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+  #     OS_PROJECT_NAME: ${{ secrets[format('OS_PROJECT_NAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+  #     OS_USER_DOMAIN_NAME: ${{ secrets[format('OS_USER_DOMAIN_NAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+  #     OS_COMPUTE_URL: ${{ secrets[format('OS_COMPUTE_URL_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+  #     cc_id: ${{ needs.pre_chamber_deployment.outputs.cc_id }}
+  #     TF_CLI_CONFIG_FILE: ${{ secrets.TF_CLI_CONFIG_FILE }}
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v3
+  #     with:
+  #       fetch-depth: 0
+  #       token: ${{ secrets.REPO_TOKEN }}
+   
+  #   - name: Checkout the files
+  #     uses: actions/checkout@v3
+  #     with:
+  #       repository: IT/OnCloud_IaC_Github_Actions
+  #       path: ./OnCloud_IaC_Github_Actions
+  #       token: ${{ secrets.REPO_TOKEN }}
+
+  #   - name: Setup Git Credentials
+  #     uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+  #     with:
+  #       credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+  #   - name: Configure AWS credentials
+  #     uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+  #     with:
+  #       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #       aws-region: us-west-2
+
+  #   - name: Checkout the files
+  #     uses: actions/checkout@v3
+  #     with:
+  #       repository: IT/terraform-cadencecld-openstack
+  #       path: ./terraform-cadencecld-openstack
+  #       token: ${{ secrets.REPO_TOKEN }} 
+  #       fetch-depth: 0    
+    
+        
+  #   - name: Setup Terraform
+  #     uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-terraform-main
+  #     with:
+  #       terraform_version: 1.5.7
+
+  #   - name: Terragrunt Plan
+  #     if: ${{ contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'add_chamber') }}
+  #     run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin plan
+  #     working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+    
+     
+  #   - name: Terragrunt Apply
+  #     id: tf_apply
+  #     continue-on-error: true
+  #     if: ${{ success() &&  !contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'delete_chamber')  && contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'add_chamber') }}
+  #     run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
+  #     working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs//${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+    
+  #  # - name: Wait for OpenStack VMs Reboot Approval
+  #  #   uses: ./OnCloud_IaC_Github_Actions/.github/actions/approval-action-main
+  #  #   with:
+  #  #     approvers: "srinip"
+  #  #     token: ${{ secrets.REPO_TOKEN }}
+  #  #     issueTitle: "tf approval"
+  #  #     issueBody: "Tf approval request pending"
+  #  #     approveWords: 'apply,approve, approved,destroy'
+  #  #     rejectWords: 'deny, denied, reject, rejected'
+  #  #     issueLabels: 'ManualApproval,ApprovalAction'
+  #  #     waitInterval: '1'
+  #  #     waitTimeout: '60'
+  #  #     minimumApprovals: '1'
+    
+  #   - name: Reboot VMs
+  #     id: reboot_vm
+  #     if: ${{ steps.tf_apply.outcome == 'failure' }}
+  #     run: |
+  #         json_auth_data='{
+  #           "auth":{
+  #             "identity":{
+  #                "methods":["password"],
+  #                "password": { 
+  #                  "user": { 
+  #                    "name": "${{ env.OS_USERNAME }}", 
+  #                    "domain": { "id": "default" }, 
+  #                    "password": "${{ env.OS_PASSWORD }}"
+  #                  }
+  #                }
+  #             }
+  #           }
+  #         }'
+  #         OS_AUTH_TOKEN=$(curl -is -X POST -H "Content-Type: application/json" ${{ env.OS_AUTH_URL }}/v3/auth/tokens \
+  #          -d "$json_auth_data" | grep -i '^x-subject-token' | cut -d' ' -f2 | tr -d '\r')
+  #         vm_list=$(curl -s -X GET -H "X-Auth-Token: $OS_AUTH_TOKEN"  -H "Content-Type: application/json" \
+  #          "${{ env.OS_COMPUTE_URL }}/servers?all_tenants=True&name=${{ env.cc_id }}" | jq -r '.servers[] | .id')
+  #         echo "vm_list= $vm_list"
+  #         vm_list_count=`echo -e $vm_list | tr ' ' '\n' | wc -l | xargs`
+  #         json_data='{
+  #           "reboot":{
+  #             "type":"HARD"
+  #           }
+  #         }'
+  #         echo "json_date=$json_data"
+  #         echo -e $vm_list | tr ' ' '\n' | while read i; do curl -s -X POST -H "X-Auth-Token: $OS_AUTH_TOKEN" \
+  #          -H "Content-Type: application/json" "${{ env.OS_COMPUTE_URL }}/servers/$i/action" \
+  #          -d "$json_data"; echo "$i is rebooted"; done
+  #         vm_running=0
+  #         echo "vm_running = $vm_running, vm_list_count=$vm_list_count"
+  #         while [ "$vm_running" != "$vm_list_count" ]; do
+  #           echo "wait....60 seconds"
+  #           sleep 60
+  #           vm_running=$(curl -s -X GET -H "X-Auth-Token: $OS_AUTH_TOKEN"  -H "Content-Type: application/json" \
+  #             "${{ env.OS_COMPUTE_URL }}/servers?all_tenants=True&name=${{ env.cc_id }}&status=ACTIVE" \
+  #             | jq '.servers | length')
+  #           echo "vm_running = $vm_running, vm_list_count=$vm_list_count"
+  #         done
+  #     working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs/${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+        
+  #   - name: Terragrunt Apply - Second
+  #     if: ${{ steps.tf_apply.outcome == 'failure' }}
+  #     run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
+  #     working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs//${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+    
+  #   - name: Terragrunt CC Destroy
+  #     if: ${{ contains(needs.pre_chamber_deployment.outputs.cc_changed_files, 'delete_chamber') }}
+  #     run: |
+  #       /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin destroy -auto-approve
+  #     working-directory: ./terraform-cadencecld-openstack/CustomerVPC/terraform/config/envs//${{ needs.pre_chamber_deployment.outputs.cc_chamber_chdir }}
+    
+  #   - name: Terragrunt AWS Destroy
+  #     if: ${{ needs.aws_chamber_deployment.outputs.del_chamber_path != '' }}
+  #     run: |
+  #       /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin destroy -auto-approve
+  #     working-directory: ${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}
+  #   #  Commented out for the time, Since this only work for c4 account. Will enhance this logic
+  #   # - name: Terragrunt AWS Post Destroy
+  #   #   if: ${{ needs.aws_chamber_deployment.outputs.del_chamber_path != '' }}
+  #   #   run: |
+  #   #     cd ${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}
+  #   #     env_file=$(ls *.tfvars.json | grep -E '^[a-zA-Z]+[0-9]+\.tfvars\.json$')
+  #   #     echo "Found TF var json file: $env_file"
+  #   #     del_reg=$(jq -r '.region' $env_file)
+  #   #     del_env_name=$([[ "$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f10)" == "non-prod" ]] && echo "dev" || echo "prod")
+  #   #     bucket_prefix=$([[ "$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f10)" == "non-prod" ]] && echo "-dev" || echo "")
+  #   #     del_ch_json=$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f12)
+  #   #     del_ch_name=$(echo "${{ needs.aws_chamber_deployment.outputs.del_chamber_path }}" | cut -d "/" -f12 |cut -c1-2)
+
+  #   #     # Retrieve the object's size
+
+  #   #     ##object_size=$(aws s3api head-object --bucket "cadencecloud-${del_env_name}-${del_reg}" --key "c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json" --query 'ContentLength' --output text)
+  #   #     object_size=$(aws s3api head-object --bucket "cadencecloud-${del_env_name}-${del_reg}" --key "c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json" --region "${del_reg}" --query 'ContentLength' --output text) || echo "Error: unable to retrieve object size"
+
+
+  #   #     # Check if the object size is zero
+  #   #     if [ "$object_size" -eq 0 ]; then
+  #   #         echo "Object ${del_ch_json}.json has zero size, skipping deletion."
+  #   #     else
+  #   #         # If the object size is not zero, delete it
+  #   #         aws s3 rm "s3://cadencecloud${bucket_prefix}-${del_reg}/c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json" --region "${del_reg}"
+  #   #         echo "s3://cadencecloud${bucket_prefix}-${del_reg}/c30-${del_env_name}/${del_ch_name}/${del_ch_json}.json"
+  #   #     fi
+
+  #   #     sleep 180
+  #   #     echo "${del_ch_json}vpc_flow_log_cloudwatch_group"
+  #   #     aws logs delete-log-group --log-group-name ${del_ch_json}vpc_flow_log_cloudwatch_group --region "${del_reg}"
