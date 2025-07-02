@@ -24,3 +24,13 @@ jobs:
           cat changed_files.txt
           list=$(cat changed_files.txt | tr '\n' ',')
           echo "added=$list" >> $GITHUB_ENV
+
+      - name: Sleep to allow time for another commit
+        run: |
+          echo "Sleeping for 60 seconds to allow additional changes..."
+          sleep 60
+
+      - name: Print added files from environment
+        run: |
+          echo "These files were detected as added or modified:"
+          echo "${{ env.added }}"
