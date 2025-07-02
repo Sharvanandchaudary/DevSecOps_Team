@@ -10,16 +10,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout the current repo (DevSecOps_Team)
+      - name: Checkout DevSecOps_Team repo
         uses: actions/checkout@v3
         with:
+          repository: Sharvanandchaudary/DevSecOps_Team
+          path: DevSecOps_Team
           fetch-depth: 0
-          path: OnCloud_IaC_Github_Actions
 
-      - name: Get changed files in CC directory
+      - name: Get changed files from push
+        working-directory: DevSecOps_Team
         run: |
-          cd OnCloud_IaC_Github_Actions
-          git diff --name-only HEAD~1..HEAD > changed_files.txt
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changed_files.txt
           cat changed_files.txt
           list=$(cat changed_files.txt | tr '\n' ',')
           echo "added=$list" >> $GITHUB_ENV
