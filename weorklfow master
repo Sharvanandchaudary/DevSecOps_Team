@@ -1,0 +1,24 @@
+name:        'Get Changed Files'
+description: 'Saves lists of changed files as JSON for use by other actions.'
+author:      'Dustin Falgout <dustin@falgout.us>'
+runs:
+  using: 'node12'
+  main:  'dist/index.js'
+inputs:
+  token:
+    description: GitHub Personal Access Token
+    required:    true
+outputs:
+  all:
+    description: JSON array of all changed files that weren't removed
+  added:
+    description: JSON array of added files
+  modified:
+    description: JSON array of modified files
+  renamed:
+    description: JSON array of renamed files
+  removed:
+    description: JSON array of removed files
+branding:
+  icon:  'search'
+  color: 'gray-dark'
