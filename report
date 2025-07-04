@@ -1,0 +1,39 @@
+To enhance the deployment pipeline to ensure:
+
+Seamless, isolated deployments per chamber.
+
+Parallel execution of deployments using a matrix strategy.
+
+Readiness for thorough testing in the dev environment.
+
+Work Done
+Implemented new code blocks into the GitHub Actions workflow to:
+
+Dynamically detect all changed chambers.
+
+Pass them to a matrix job for isolated parallel deployments.
+
+Added logic to collect chamber-specific paths from the git diff.
+
+Verified flow and outputs from the pre_chamber_deployment job.
+
+Modified the downstream job to loop over the matrix and deploy each chamber independently.
+
+Ensured compatibility between AWS and OpenStack chamber change detection.
+
+Validated parts of the pipeline logic by reviewing workflow behavior on multiple test commits.
+
+Documented and commented on critical areas of the pipeline for better maintainability.
+
+Next Steps
+Awaiting WCAG portal access to enable dev-level testing through the front-end interface.
+
+Thoroughly test the enhanced pipeline in the dev environment:
+
+Validate parallelism and isolation per deployment.
+
+Test behavior on simultaneous AWS/OpenStack deployments.
+
+Confirm correct chamber path parsing and variable flow.
+
+Once validated, prepare for promotion to staging or production with test results.
