@@ -3,7 +3,7 @@ name: Chamber Deployment Test
 on:
   push:
     paths:
-      - 'env/da/da01/**'
+      - 'env/dev/da/da01/**'
 
 jobs:
   pre_chamber:
@@ -20,7 +20,10 @@ jobs:
         run: echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
 
       - name: Show Commit SHA
-        run: echo "Triggered by commit: ${{ github.sha }}"
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          run: |
+            echo "Triggered by commit: $COMMIT_SHA"
 
   aws_chamber:
     needs: pre_chamber
