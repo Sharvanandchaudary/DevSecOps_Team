@@ -3,7 +3,7 @@ name: Chamber Deployment Test
 on:
   push:
     paths:
-      - 'env/dev/da/da01/**'
+      - 'env/dev/da01/**'
 
 jobs:
   pre_chamber:
