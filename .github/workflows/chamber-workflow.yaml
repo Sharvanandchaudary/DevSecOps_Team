@@ -22,8 +22,9 @@ jobs:
       - name: Show Commit SHA
         env:
           COMMIT_SHA: ${{ github.sha }}
-          run: |
-            echo "Triggered by commit: $COMMIT_SHA"
+        run: |
+          echo "Triggered by commit: $COMMIT_SHA"
+
 
   aws_chamber:
     needs: pre_chamber
