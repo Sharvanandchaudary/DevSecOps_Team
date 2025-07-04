@@ -1,0 +1,47 @@
+name: Chamber Deployment Test
+
+on:
+  push:
+    paths:
+      - 'env/da/da01/**'
+
+jobs:
+  pre_chamber:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.save_sha.outputs.sha }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - id: save_sha
+        run: echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Show Commit SHA
+        run: echo "Triggered by commit: ${{ github.sha }}"
+
+  aws_chamber:
+    needs: pre_chamber
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code at SHA
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.pre_chamber.outputs.commit_sha }}
+
+      - name: Simulate AWS Deployment
+        run: echo "Deploying with commit ${{ needs.pre_chamber.outputs.commit_sha }}"
+
+  openstack_chamber:
+    needs: pre_chamber
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code at SHA
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.pre_chamber.outputs.commit_sha }}
+
+      - name: Simulate OpenStack Deployment
+        run: echo "Deploying OpenStack with commit ${{ needs.pre_chamber.outputs.commit_sha }}"
