@@ -2,8 +2,11 @@ name: Chamber Deployment Test
 
 on:
   push:
+    branches:
+      - 'dev1'                # Trigger on pushes to main branch
     paths:
-      - 'env/dev/da01/**'
+      - 'env/_dev/da01/**'  # FIXED path here
+  workflow_dispatch:        # Optional manual trigger for testing
 
 jobs:
   pre_chamber:
@@ -25,7 +28,6 @@ jobs:
         run: |
           echo "Triggered by commit: $COMMIT_SHA"
 
-
   aws_chamber:
     needs: pre_chamber
     runs-on: ubuntu-latest
@@ -36,16 +38,4 @@ jobs:
           ref: ${{ needs.pre_chamber.outputs.commit_sha }}
 
       - name: Simulate AWS Deployment
-        run: echo "Deploying with commit ${{ needs.pre_chamber.outputs.commit_sha }}"
-
-  openstack_chamber:
-    needs: pre_chamber
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code at SHA
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ needs.pre_chamber.outputs.commit_sha }}
-
-      - name: Simulate OpenStack Deployment
-        run: echo "Deploying OpenStack with commit ${{ needs.pre_chamber.outputs.commit_sha }}"
+        run: echo "AWS Deploy at commit ${{ needs.pre_chamber.outputs.commit_sha }}"
