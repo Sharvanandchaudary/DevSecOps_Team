@@ -3,9 +3,9 @@ name: Chamber Deployment Test
 on:
   push:
     branches:
-      - 'dev1'                # Trigger on pushes to main branch
+      - 'dev1'                # Trigger on pushes to dev1 branch
     paths:
-      - 'env/dev/da01/**'  # FIXED path here
+      - 'env/_dev/da01/**'  # FIXED path here
   workflow_dispatch:        # Optional manual trigger for testing
 
 jobs:
