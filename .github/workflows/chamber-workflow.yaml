@@ -1,12 +1,12 @@
-name: Chamber Deployment Test
+name: Chamber Deployment Full
 
 on:
   push:
     branches:
-      - 'dev1'                # Trigger on pushes to dev1 branch
+      - dev1
     paths:
-      - 'env/_dev/da01/**'  # FIXED path here
-  workflow_dispatch:        # Optional manual trigger for testing
+      - 'CustomerVPC/terraform/config/envs/**'
+  workflow_dispatch:
 
 jobs:
   pre_chamber:
@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - id: save_sha
-        run: echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+        run: echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Show Commit SHA
         env:
@@ -28,14 +28,29 @@ jobs:
         run: |
           echo "Triggered by commit: $COMMIT_SHA"
 
-  aws_chamber:
+
+  aws_deploy:
     needs: pre_chamber
     runs-on: ubuntu-latest
+    if: ${{ contains(github.event.head_commit.message, 'aws') || contains(github.event.head_commit.message, 'all') }}
     steps:
-      - name: Checkout Code at SHA
+      - name: Checkout Code
         uses: actions/checkout@v3
         with:
           ref: ${{ needs.pre_chamber.outputs.commit_sha }}
 
       - name: Simulate AWS Deployment
         run: echo "AWS Deploy at commit ${{ needs.pre_chamber.outputs.commit_sha }}"
+
+  openstack_deploy:
+    needs: pre_chamber
+    runs-on: ubuntu-latest
+    if: ${{ contains(github.event.head_commit.message, 'openstack') || contains(github.event.head_commit.message, 'all') }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.pre_chamber.outputs.commit_sha }}
+
+      - name: Simulate OpenStack Deployment
+        run: echo "OpenStack Deploy at commit ${{ needs.pre_chamber.outputs.commit_sha }}"
