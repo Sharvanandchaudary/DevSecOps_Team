@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - 'dev1'                # Trigger on pushes to main branch
-    paths:
-      - 'env/_dev/da01/**'  # FIXED path here
+    # paths:
+    #   - 'env/_dev/da01/**'  # FIXED path here
   workflow_dispatch:        # Optional manual trigger for testing
 
 jobs:
