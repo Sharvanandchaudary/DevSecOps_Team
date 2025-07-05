@@ -1,0 +1,41 @@
+name: Chamber Deployment Test
+
+on:
+  push:
+    branches:
+      - 'dev1'                # Trigger on pushes to main branch
+    paths:
+      - 'env/_dev/da01/**'  # FIXED path here
+  workflow_dispatch:        # Optional manual trigger for testing
+
+jobs:
+  pre_chamber:
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.save_sha.outputs.sha }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - id: save_sha
+        run: echo "sha=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Show Commit SHA
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "Triggered by commit: $COMMIT_SHA"
+
+  aws_chamber:
+    needs: pre_chamber
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code at SHA
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.pre_chamber.outputs.commit_sha }}
+
+      - name: Simulate AWS Deployment
+        run: echo "AWS Deploy at commit ${{ needs.pre_chamber.outputs.commit_sha }}"
