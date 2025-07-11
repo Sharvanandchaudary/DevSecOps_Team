@@ -14,45 +14,26 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0  # Make sure you have full git history
+        fetch-depth: 0
 
-    # Step 1: Check if artifact already exists for this run
-    - name: Check if artifact exists
-      id: check_artifact
-      run: |
-        artifact_name="changed-files"
-        artifacts=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts")
-        if echo "$artifacts" | jq -r '.artifacts[].name' | grep -q "^${artifact_name}$"; then
-          echo "exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "exists=false" >> $GITHUB_OUTPUT
-        fi
-
-    # Step 2: Download artifact if it exists
-    - name: Download changed-files artifact
-      if: steps.check_artifact.outputs.exists == 'true'
-      uses: actions/download-artifact@v4
+    - name: Restore changed files cache
+      id: cache-changed-files
+      uses: actions/cache@v4
       with:
-        name: changed-files
+        path: changed_files.txt
+        key: changed-files-${{ github.run_id }}
 
-    - name: Use downloaded file
-      if: steps.check_artifact.outputs.exists == 'true'
+    - name: Use cached changed files
+      if: steps.cache-changed-files.outputs.cache-hit == 'true'
       run: |
         echo "Re-using previously detected changed files:"
         cat changed_files.txt
 
-    # Step 3: Generate and upload artifact if it doesn't exist
     - name: Detect changed files and save
-      if: steps.check_artifact.outputs.exists == 'false'
+      if: steps.cache-changed-files.outputs.cache-hit != 'true'
       run: |
         git diff --name-only HEAD~1 > changed_files.txt
         echo "Generated changed_files.txt:"
         cat changed_files.txt
 
-    - name: Upload changed-files artifact
-      if: steps.check_artifact.outputs.exists == 'false'
-      uses: actions/upload-artifact@v4
-      with:
-        name: changed-files
-        path: changed_files.txt
+    # No need to upload anything, caching handles reuse
