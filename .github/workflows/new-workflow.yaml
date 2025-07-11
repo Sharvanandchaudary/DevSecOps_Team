@@ -16,24 +16,24 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Restore changed files cache
+    - name: Restore changed files cache by commit
       id: cache-changed-files
       uses: actions/cache@v3
       with:
         path: changed_files.txt
-        key: changed-files-${{ github.run_id }}
+        key: changed-files-${{ github.sha }}
+        restore-keys: |
+          changed-files-
 
     - name: Use cached changed files
       if: steps.cache-changed-files.outputs.cache-hit == 'true'
       run: |
-        echo "Re-using previously detected changed files:"
+        echo "✅ Re-using previously detected changed files:"
         cat changed_files.txt
 
     - name: Detect changed files and save
       if: steps.cache-changed-files.outputs.cache-hit != 'true'
       run: |
         git diff --name-only HEAD~1 > changed_files.txt
-        echo "Generated changed_files.txt:"
+        echo "📁 Generated changed_files.txt:"
         cat changed_files.txt
-
-    # No need to upload anything, caching handles reuse
