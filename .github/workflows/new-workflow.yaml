@@ -1,39 +1,101 @@
-name: Detect and Use Git Changes
+name: Chamber Detection Test Workflow
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
-  check-and-use-changes:
+  pre_chamber_deployment:
     runs-on: ubuntu-latest
+    outputs:
+      aws_changed: ${{ steps.setflags.outputs.aws_changed }}
+      cc_changed: ${{ steps.setflags.outputs.cc_changed }}
 
     steps:
-    - name: Checkout code
+    - name: Checkout repo
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Restore changed files cache
-      id: cache-changed-files
-      uses: actions/cache@v4
-      with:
-        path: changed_files.txt
-        key: changed-files-${{ github.run_id }}
-
-    - name: Use cached changed files
-      if: steps.cache-changed-files.outputs.cache-hit == 'true'
+    - name: Install GitHub CLI
       run: |
-        echo "Re-using previously detected changed files:"
-        cat changed_files.txt
+        sudo apt-get update
+        sudo apt-get install -y gh
 
-    - name: Detect changed files and save
-      if: steps.cache-changed-files.outputs.cache-hit != 'true'
+    - name: Try to reuse artifact from last push
+      id: download
+      continue-on-error: true
       run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "Looking for previous push..."
+          latest_run_id=$(gh run list --workflow="Chamber Detection Test Workflow" --branch=main --limit=10 --json databaseId,event,status -q \
+            '.[] | select(.event=="push" and .status=="completed") | .databaseId' | head -n 1)
+
+          if [ -n "$latest_run_id" ]; then
+            echo "Found previous push run ID: $latest_run_id"
+            gh run download "$latest_run_id" -n changed-files
+            if [ -f changed_files.txt ]; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "Reused artifact:"
+              cat changed_files.txt
+            else
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        else
+          echo "Not a manual trigger, skipping reuse."
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Detect changes if no artifact reused
+      if: steps.download.outputs.exists != 'true'
+      run: |
+        echo "Detecting changes since previous commit..."
         git diff --name-only HEAD~1 > changed_files.txt
-        echo "Generated changed_files.txt:"
+        echo "Detected files:"
         cat changed_files.txt
 
-    # No need to upload anything, caching handles reuse
+    - name: Upload artifact
+      if: steps.download.outputs.exists != 'true' && github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        name: changed-files
+        path: changed_files.txt
+
+    - name: Set AWS and CC flags
+      id: setflags
+      run: |
+        AWS=false
+        CC=false
+        while IFS= read -r line; do
+          if [[ "$line" == dn01/* ]]; then AWS=true; fi
+          if [[ "$line" == dn02/* ]]; then CC=true; fi
+        done < changed_files.txt
+
+        echo "AWS: $AWS, CC: $CC"
+        echo "aws_changed=$AWS" >> $GITHUB_OUTPUT
+        echo "cc_changed=$CC" >> $GITHUB_OUTPUT
+
+  aws_chamber_deployment:
+    runs-on: ubuntu-latest
+    needs: pre_chamber_deployment
+    if: needs.pre_chamber_deployment.outputs.aws_changed == 'true'
+
+    steps:
+    - name: Simulate AWS deployment
+      run: echo "✅ AWS Chamber is being deployed due to changes in dn01"
+
+  cc_chamber_deployment:
+    runs-on: ubuntu-latest
+    needs: pre_chamber_deployment
+    if: needs.pre_chamber_deployment.outputs.cc_changed == 'true'
+
+    steps:
+    - name: Simulate CC deployment
+      run: echo "✅ CC Chamber is being deployed due to changes in dn02"
