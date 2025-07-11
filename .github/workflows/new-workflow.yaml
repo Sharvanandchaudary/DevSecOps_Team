@@ -22,48 +22,46 @@ jobs:
     - name: Install GitHub CLI
       run: |
         sudo apt-get update
-        sudo apt-get install -y gh
+        sudo apt-get install -y gh jq
 
-    - name: Try to reuse artifact from previous successful run (for rerun support)
+    - name: Try to reuse artifact from successful prior run (by commit SHA)
       id: download
       continue-on-error: true
       run: |
-        echo "Looking up previous successful run with the same commit SHA: ${{ github.sha }}"
-
-        # Find all runs on this commit SHA
+        echo "Looking up successful run for commit SHA: ${{ github.sha }}"
+        
         run_id=$(gh api -H "Accept: application/vnd.github+json" \
           /repos/${{ github.repository }}/actions/runs \
           | jq -r --arg sha "${{ github.sha }}" \
-            '.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion == "success") | .id' \
-            | head -n 1)
+            '.workflow_runs[] 
+             | select(.head_sha == $sha and .name == "Chamber Detection Test Workflow" and .status == "completed" and .conclusion == "success") 
+             | .id' | head -n 1)
 
         if [ -n "$run_id" ]; then
-          echo "Found run: $run_id"
+          echo "Found successful run ID: $run_id"
           gh run download "$run_id" -n changed-files
           if [ -f changed_files.txt ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Reused artifact from run $run_id"
+            echo "Reused changed_files.txt:"
+            cat changed_files.txt
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "No changed_files.txt found in artifact"
           fi
         else
           echo "exists=false" >> "$GITHUB_OUTPUT"
-          echo "No successful runs found for this commit"
+          echo "No successful prior run found."
         fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
-    - name: Detect changes if no artifact reused
+    - name: Detect changed files if not reusing
       if: steps.download.outputs.exists != 'true'
       run: |
-        echo "Detecting changes since previous commit..."
         git diff --name-only HEAD~1 > changed_files.txt
-        echo "Detected files:"
+        echo "Generated changed_files.txt:"
         cat changed_files.txt
 
-    - name: Upload artifact
+    - name: Upload changed-files artifact
       if: steps.download.outputs.exists != 'true' && github.event_name == 'push'
       uses: actions/upload-artifact@v4
       with:
@@ -81,23 +79,21 @@ jobs:
         done < changed_files.txt
 
         echo "AWS: $AWS, CC: $CC"
-        echo "aws_changed=$AWS" >> $GITHUB_OUTPUT
-        echo "cc_changed=$CC" >> $GITHUB_OUTPUT
+        echo "aws_changed=$AWS" >> "$GITHUB_OUTPUT"
+        echo "cc_changed=$CC" >> "$GITHUB_OUTPUT"
 
   aws_chamber_deployment:
     runs-on: ubuntu-latest
     needs: pre_chamber_deployment
     if: needs.pre_chamber_deployment.outputs.aws_changed == 'true'
-
     steps:
-    - name: Simulate AWS deployment
-      run: echo "✅ AWS Chamber is being deployed due to changes in dn01"
+    - name: AWS Deployment Simulation
+      run: echo "✅ Triggered AWS chamber deployment due to changes in dn01/*"
 
   cc_chamber_deployment:
     runs-on: ubuntu-latest
     needs: pre_chamber_deployment
     if: needs.pre_chamber_deployment.outputs.cc_changed == 'true'
-
     steps:
-    - name: Simulate CC deployment
-      run: echo "✅ CC Chamber is being deployed due to changes in dn02"
+    - name: CC Deployment Simulation
+      run: echo "✅ Triggered CC chamber deployment due to changes in dn02/*"
