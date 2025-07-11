@@ -52,7 +52,7 @@ jobs:
 
     - name: Upload changed-files artifact
       if: steps.check_artifact.outputs.exists == 'false'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: changed-files
         path: changed_files.txt
