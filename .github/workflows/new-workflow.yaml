@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Make sure you have full git history
 
@@ -32,7 +32,7 @@ jobs:
     # Step 2: Download artifact if it exists
     - name: Download changed-files artifact
       if: steps.check_artifact.outputs.exists == 'true'
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
         name: changed-files
 
