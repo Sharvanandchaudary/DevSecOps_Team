@@ -16,47 +16,24 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Get current commit SHA
-      id: get_sha
-      run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-    - name: Check if artifact exists for this commit
-      id: check_artifact
-      run: |
-        artifact_name="changed-files-${{ steps.get_sha.outputs.sha }}"
-        echo "Looking for artifact: $artifact_name"
-        
-        artifacts=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-          "https://api.github.com/repos/${{ github.repository }}/actions/artifacts?per_page=100")
-
-        if echo "$artifacts" | jq -r '.artifacts[].name' | grep -q "^${artifact_name}$"; then
-          echo "exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "exists=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Download existing changed files artifact
-      if: steps.check_artifact.outputs.exists == 'true'
-      uses: actions/download-artifact@v4
+    - name: Restore changed files cache by commit
+      id: cache-changed-files
+      uses: actions/cache@v3
       with:
-        name: changed-files-${{ steps.get_sha.outputs.sha }}
+        path: changed_files.txt
+        key: changed-files-${{ github.sha }}
+        restore-keys: |
+          changed-files-
 
-    - name: Use downloaded file
-      if: steps.check_artifact.outputs.exists == 'true'
+    - name: Use cached changed files
+      if: steps.cache-changed-files.outputs.cache-hit == 'true'
       run: |
-        echo "Reusing previously uploaded changed files:"
+        echo "✅ Re-using previously detected changed files:"
         cat changed_files.txt
 
     - name: Detect changed files and save
-      if: steps.check_artifact.outputs.exists == 'false'
+      if: steps.cache-changed-files.outputs.cache-hit != 'true'
       run: |
         git diff --name-only HEAD~1 > changed_files.txt
-        echo "Generated changed_files.txt:"
+        echo "📁 Generated changed_files.txt:"
         cat changed_files.txt
-
-    - name: Upload changed files artifact
-      if: steps.check_artifact.outputs.exists == 'false'
-      uses: actions/upload-artifact@v4
-      with:
-        name: changed-files-${{ steps.get_sha.outputs.sha }}
-        path: changed_files.txt
