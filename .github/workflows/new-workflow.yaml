@@ -1,36 +1,58 @@
-name: DevSecOps Team Workflow
+name: Detect and Use Git Changes
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
 
 jobs:
-  pre_chamber_deployment:
+  check-and-use-changes:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout DevSecOps_Team repo
-        uses: actions/checkout@v3
-        with:
-          repository: Sharvanandchaudary/DevSecOps_Team
-          path: DevSecOps_Team
-          fetch-depth: 0
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Make sure you have full git history
 
-      - name: Get changed files from push
-        working-directory: DevSecOps_Team
-        run: |
-          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changed_files.txt
-          cat changed_files.txt
-          list=$(cat changed_files.txt | tr '\n' ',')
-          echo "added=$list" >> $GITHUB_ENV
+    # Step 1: Check if artifact already exists for this run
+    - name: Check if artifact exists
+      id: check_artifact
+      run: |
+        artifact_name="changed-files"
+        artifacts=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts")
+        if echo "$artifacts" | jq -r '.artifacts[].name' | grep -q "^${artifact_name}$"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
 
-      - name: Sleep to allow time for another commit
-        run: |
-          echo "Sleeping for 60 seconds to allow additional changes..."
-          sleep 60
+    # Step 2: Download artifact if it exists
+    - name: Download changed-files artifact
+      if: steps.check_artifact.outputs.exists == 'true'
+      uses: actions/download-artifact@v3
+      with:
+        name: changed-files
 
-      - name: Print added files from environment
-        run: |
-          echo "These files were detected as added or modified:"
-          echo "${{ env.added }}"
+    - name: Use downloaded file
+      if: steps.check_artifact.outputs.exists == 'true'
+      run: |
+        echo "Re-using previously detected changed files:"
+        cat changed_files.txt
+
+    # Step 3: Generate and upload artifact if it doesn't exist
+    - name: Detect changed files and save
+      if: steps.check_artifact.outputs.exists == 'false'
+      run: |
+        git diff --name-only HEAD~1 > changed_files.txt
+        echo "Generated changed_files.txt:"
+        cat changed_files.txt
+
+    - name: Upload changed-files artifact
+      if: steps.check_artifact.outputs.exists == 'false'
+      uses: actions/upload-artifact@v3
+      with:
+        name: changed-files
+        path: changed_files.txt
