@@ -1,101 +1,39 @@
-name: Chamber Detection Test Workflow
+name: Detect and Use Git Changes
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
 
 jobs:
-  pre_chamber_deployment:
+  check-and-use-changes:
     runs-on: ubuntu-latest
-    outputs:
-      aws_changed: ${{ steps.setflags.outputs.aws_changed }}
-      cc_changed: ${{ steps.setflags.outputs.cc_changed }}
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - name: Install GitHub CLI + jq
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gh jq
+    - name: Restore changed files cache
+      id: cache-changed-files
+      uses: actions/cache@v3
+      with:
+        path: changed_files.txt
+        key: changed-files-${{ github.run_id }}
 
-    - name: Try to reuse changed-files.txt from previous successful run (same commit SHA)
-      id: download
-      continue-on-error: true
+    - name: Use cached changed files
+      if: steps.cache-changed-files.outputs.cache-hit == 'true'
       run: |
-        echo "🔎 Looking for previous successful run with commit SHA: ${{ github.sha }}"
-        
-        run_id=$(gh api -H "Accept: application/vnd.github+json" \
-          /repos/${{ github.repository }}/actions/runs \
-          | jq -r --arg sha "${{ github.sha }}" \
-            '.workflow_runs[] 
-             | select(.head_sha == $sha and .name == "Chamber Detection Test Workflow" and .status == "completed" and .conclusion == "success") 
-             | .id' | head -n 1)
-
-        if [ -n "$run_id" ]; then
-          echo "✅ Found previous run: $run_id"
-          gh run download "$run_id" -n changed-files
-          if [ -f changed_files.txt ]; then
-            echo "✅ Reused changed_files.txt"
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            cat changed_files.txt
-          else
-            echo "❌ changed_files.txt not found in artifact"
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-        else
-          echo "❌ No previous successful run for this commit"
-          echo "exists=false" >> "$GITHUB_OUTPUT"
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Detect changed files if no artifact found
-      if: steps.download.outputs.exists != 'true'
-      run: |
-        git diff --name-only HEAD~1 > changed_files.txt
-        echo "📁 Detected changes:"
+        echo "Re-using previously detected changed files:"
         cat changed_files.txt
 
-    - name: Upload changed-files artifact (only on first push)
-      if: steps.download.outputs.exists != 'true' && github.event_name == 'push'
-      uses: actions/upload-artifact@v4
-      with:
-        name: changed-files
-        path: changed_files.txt
-
-    - name: Set AWS and CC flags
-      id: setflags
+    - name: Detect changed files and save
+      if: steps.cache-changed-files.outputs.cache-hit != 'true'
       run: |
-        AWS=false
-        CC=false
-        while IFS= read -r line; do
-          if [[ "$line" == dn01/* ]]; then AWS=true; fi
-          if [[ "$line" == dn02/* ]]; then CC=true; fi
-        done < changed_files.txt
+        git diff --name-only HEAD~1 > changed_files.txt
+        echo "Generated changed_files.txt:"
+        cat changed_files.txt
 
-        echo "AWS: $AWS | CC: $CC"
-        echo "aws_changed=$AWS" >> "$GITHUB_OUTPUT"
-        echo "cc_changed=$CC" >> "$GITHUB_OUTPUT"
-
-  aws_chamber_deployment:
-    runs-on: ubuntu-latest
-    needs: pre_chamber_deployment
-    if: needs.pre_chamber_deployment.outputs.aws_changed == 'true'
-
-    steps:
-    - name: AWS Chamber Logic
-      run: echo "✅ AWS chamber triggered due to changes in dn01/*"
-
-  cc_chamber_deployment:
-    runs-on: ubuntu-latest
-    needs: pre_chamber_deployment
-    if: needs.pre_chamber_deployment.outputs.cc_changed == 'true'
-
-    steps:
-    - name: CC Chamber Logic
-      run: echo "✅ CC chamber triggered due to changes in dn02/*"
+    # No need to upload anything, caching handles reuse
