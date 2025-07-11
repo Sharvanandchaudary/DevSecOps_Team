@@ -24,34 +24,36 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y gh
 
-    - name: Try to reuse artifact from last push
+    - name: Try to reuse artifact from previous successful run (for rerun support)
       id: download
       continue-on-error: true
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "Looking for previous push..."
-          latest_run_id=$(gh run list --workflow="Chamber Detection Test Workflow" --branch=main --limit=10 --json databaseId,event,status -q \
-            '.[] | select(.event=="push" and .status=="completed") | .databaseId' | head -n 1)
+        echo "Looking up previous successful run with the same commit SHA: ${{ github.sha }}"
 
-          if [ -n "$latest_run_id" ]; then
-            echo "Found previous push run ID: $latest_run_id"
-            gh run download "$latest_run_id" -n changed-files
-            if [ -f changed_files.txt ]; then
-              echo "exists=true" >> "$GITHUB_OUTPUT"
-              echo "Reused artifact:"
-              cat changed_files.txt
-            else
-              echo "exists=false" >> "$GITHUB_OUTPUT"
-            fi
+        # Find all runs on this commit SHA
+        run_id=$(gh api -H "Accept: application/vnd.github+json" \
+          /repos/${{ github.repository }}/actions/runs \
+          | jq -r --arg sha "${{ github.sha }}" \
+            '.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion == "success") | .id' \
+            | head -n 1)
+
+        if [ -n "$run_id" ]; then
+          echo "Found run: $run_id"
+          gh run download "$run_id" -n changed-files
+          if [ -f changed_files.txt ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Reused artifact from run $run_id"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No changed_files.txt found in artifact"
           fi
         else
-          echo "Not a manual trigger, skipping reuse."
           echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "No successful runs found for this commit"
         fi
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
     - name: Detect changes if no artifact reused
       if: steps.download.outputs.exists != 'true'
