@@ -1,0 +1,50 @@
+GitHub Pull Request Branching Strategy (PR Perspective Only)
+Set up protected branch rules for main:
+
+Require a pull request before merging
+
+Require at least 1 or 2 approvals before merging
+
+Dismiss stale approvals when new commits are pushed
+
+Require status checks to pass before merging (for example: build, test, checklist-validator)
+
+Require branches to be up to date before merging
+
+Restrict who can push directly to the protected branch (typically only maintainers or DevOps team)
+
+Do not allow force pushes or branch deletion
+
+Enable automatic deletion of merged branches:
+
+Go to repository settings under General > Pull Requests
+
+Turn on "Automatically delete head branches"
+
+Enforce branch naming conventions:
+
+Feature branches: feature/issue-id-description
+
+Bugfix branches: bugfix/issue-id-description
+
+Release branches: release/version
+
+Hotfix branches: hotfix/issue-description
+
+Use draft pull requests:
+
+Encourage developers to open PRs early as drafts to allow for early feedback
+
+Draft PRs do not trigger merge checks until marked "Ready for review"
+
+Enforce all PRs to pass required checks:
+
+Use GitHub Actions workflows for PR checklist validation and reviewer verification
+
+In branch protection settings, ensure that all required checks must pass before merge
+
+Disallow direct commits to main and release branches:
+
+Only allow pull requests to update protected branches
+
+Configure push restrictions under branch protection rules
