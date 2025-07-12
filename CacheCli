@@ -20,6 +20,7 @@ jobs:
       cc_id: ${{ steps.step1.outputs.cc_chamber_id }}
       commit_sha: ${{ steps.commit_sha.outputs.sha }}
       os_chamber: ${{ steps.generate_cc_changed_files.outputs.os_chamber }}
+      cc_chamber_id: ${{ steps.step1.outputs.cc_chamber_id }}
       
 
     steps:
