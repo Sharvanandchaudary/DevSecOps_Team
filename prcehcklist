@@ -1,0 +1,67 @@
+name: Enhanced PR Checklist Validator
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - review_requested
+concurrency:
+  group: pr-checklist-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  validate-checklist:
+    runs-on: gh-runner-k8-oncloud-iac-test
+
+    
+    if: |
+      github.event.action == 'opened' ||
+      github.event.action == 'synchronize' ||
+      github.event.action == 'review_requested' ||
+      (
+        github.event.action == 'edited' &&
+        (
+          github.event.changes.body ||
+          github.event.changes.title
+        )
+      )
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v3
+
+      - name: Validate Checklist and Reviewer Assignment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number
+            });
+
+            const body = pr.data.body || "";
+            const reviewers = pr.data.requested_reviewers || [];
+            const teamReviewers = pr.data.requested_teams || [];
+
+            let errors = [];
+
+            // Validate checklist
+            const checklistPattern = /- \[x\]/gi;
+            const matches = body.match(checklistPattern);
+            if (!matches || matches.length < 1) {
+              errors.push("❌ PR checklist is incomplete. Please check all required items.");
+            }
+
+            // Validate reviewer assignment
+            if (reviewers.length === 0 && teamReviewers.length === 0) {
+              errors.push("❌ No reviewers assigned to this PR. Please assign at least one reviewer.");
+            }
+
+            if (errors.length > 0) {
+              core.setFailed(errors.join("\n"));
+            } else {
+              console.log("✅ PR checklist completed and reviewers assigned.");
+            }
