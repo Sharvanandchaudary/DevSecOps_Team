@@ -1,0 +1,291 @@
+name: Terragrunt CLI flow
+
+on:
+  push:
+    branches:
+      - Release_test
+    paths:
+      - 'CustomerVPC/terraform/config/envs/*prod/*/**'
+
+  workflow_dispatch:
+
+jobs:
+  pre_chamber_deployment:
+    runs-on: cloud30-docker-mvp
+    outputs:
+      rname: ${{ steps.step1.outputs.ccid }}
+      cc_chamber_chdir: ${{ steps.step2.outputs.cc_chamber_path }}
+      cc_changed_files: ${{ steps.step2.outputs.cc_added_files }}
+      env_name: ${{ steps.step2.outputs.en_name }}
+      cc_id: ${{ steps.step1.outputs.cc_chamber_id }}
+      commit_sha: ${{ steps.commit_sha.outputs.sha }}
+
+    steps:
+      - name: Checkout main code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Output current SHA
+        id: commit_sha
+        run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Checkout shared action files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Setup Git Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+        with:
+          credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+      - name: Checkout OpenStack TF repo
+        uses: actions/checkout@v3
+        with:
+          repository: IT/terraform-cadencecld-openstack
+          path: ./terraform-cadencecld-openstack
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Restore changed files cache
+        id: cache-cc-changed-files
+        uses: actions/cache@v3
+        with:
+          path: ./terraform-cadencecld-openstack/changed_files.txt
+          key: cc-changed-files-${{ github.sha }}
+
+      - name: Use cached changed files if present
+        if: steps.cache-cc-changed-files.outputs.cache-hit == 'true'
+        run: |
+          echo " Reusing cached changed files:"
+          cat ./terraform-cadencecld-openstack/changed_files.txt
+          list=$(cat ./terraform-cadencecld-openstack/changed_files.txt | tr '\n' ',')
+          echo "added=$list" >> $GITHUB_ENV
+
+      - name: Generate CC changed files if cache not found
+        if: steps.cache-cc-changed-files.outputs.cache-hit != 'true'
+        run: |
+          cd ./terraform-cadencecld-openstack
+          echo "Detecting changed files..."
+          if [ -n "${{ github.event.before }}" ]; then
+            git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changed_files.txt
+          else
+            git diff --name-only HEAD~1..HEAD > changed_files.txt
+          fi
+          cat changed_files.txt
+          list=$(cat changed_files.txt | tr '\n' ',')
+          echo "added=$list" >> $GITHUB_ENV
+
+      - name: Get AWS changed files
+        id: files
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/gh-action-get-changed-files-master
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: AWS files were added
+        if: ${{ contains(steps.files.outputs.added, '*.tfvars.json') || contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.added, 'delete_chamber') }}
+        run: |
+          echo "chdir=$(echo \"${{ steps.files.outputs.added }}\" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
+
+      - name: AWS files were modified
+        if: ${{ contains(steps.files.outputs.modified, '*.tfvars.json') || contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.modified, 'delete_chamber') }}
+        run: |
+          echo "chdir=$(echo \"${{ steps.files.outputs.modified }}\" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
+
+      - name: CC files were added or modified
+        if: ${{ contains(env.added, '*.tfvars.json') || contains(env.added, 'add_chamber') || contains(env.added, 'delete_chamber') }}
+        run: |
+          echo "cc_chdir=$(echo \"${{ env.added }}\" | tr -d ' ' | awk -v FS="," '{for(i=1;i<=NF;i++) if ($i ~ /add_chamber$/ || $i ~ /delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-8 )" >> $GITHUB_ENV
+
+      - id: step1
+        if: ${{ env.chdir != '' }}
+        run: |
+          cd ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
+          env_file=$(ls *.tfvars.json | grep -E '^[a-zA-Z]+[0-9]+\.tfvars\.json$')
+          echo "Found TF var json file: $env_file"
+          deploy_type=$(jq -r '.settings.deployment_type' $env_file )
+          echo "depoy_env=$(jq -r '.tags.Environment' $env_file )" >> $GITHUB_ENV
+          echo "cc_env_value=$( [ \"$(jq -r '.tags.Environment' $env_file )\" = \"Production\" ] && echo "prod" || echo "non-prod" )" >> $GITHUB_ENV
+          echo "cc_cham=$(jq -r '.settings.cc_chamber' $env_file )" >> $GITHUB_ENV
+          echo "cc_env=$(jq -r '.settings.cc_env' $env_file )" >> $GITHUB_ENV
+          cc_ch=$(jq -r '.settings.cc_chamber' $env_file )
+          echo "::set-output name=ccid::$(echo $deploy_type)"
+          echo "::set-output name=cc_chamber_id::$(echo $cc_ch)"
+
+      - id: step2
+        if: ${{ env.cc_chdir != '' }}
+        run: |
+          echo "cc_chamber_path=$cc_chdir" >> $GITHUB_OUTPUT
+          echo "cc_added_files=$added" >> $GITHUB_OUTPUT
+          env_field=$(echo "$cc_chdir" | cut -d '/' -f 2)
+          env_osc=$(echo "$cc_chdir" | cut -d '/' -f 3)
+          if [ "$env_field" == "qa" ]; then
+            echo "en_name=test" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "dev" ]]; then
+            echo "en_name=dev" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "stage" ]]; then
+            echo "en_name=stage" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "prod" && "$env_osc" == "prod-1" ]]; then
+            echo "en_name=prod" >> "$GITHUB_OUTPUT"
+          elif [[ "$env_field" == "prod" && "$env_osc" == "prod-2" ]]; then
+            echo "en_name=prod2" >> "$GITHUB_OUTPUT"
+          else
+            echo "no env details found"
+          fi
+
+      - name: Validate chamber mapping
+        if: ${{ env.chdir != '' && env.cc_chdir != '' }}
+        run: |
+          aws_tfvars=$(ls "${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}"/*.tfvars.json)
+          expected_cc_chamber=$(jq -r '.settings.cc_chamber' "$aws_tfvars")
+
+          cc_path="${{ env.cc_chdir }}"
+          actual_cc_chamber=$(echo "$cc_path" | cut -d'/' -f3)
+
+          echo "🔸 AWS tfvars expects cc_chamber: $expected_cc_chamber"
+          echo "🔸 CC folder path indicates: $actual_cc_chamber"
+
+          if [[ "$expected_cc_chamber" != "$actual_cc_chamber" ]]; then
+            echo "❌ MAPPING ERROR: AWS expects CC chamber '$expected_cc_chamber', but CC changes are in '$actual_cc_chamber'"
+            exit 1
+          else
+            echo " Mapping valid: $expected_cc_chamber"
+          fi
+    
+
+  aws_chamber_deployment:
+        runs-on: cloud30-docker-mvp
+        needs: pre_chamber_deployment
+        if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp-cc' || needs.pre_chamber_deployment.outputs.rname == 'mvp' }} 
+        outputs:
+            del_chamber_path: ${{ steps.step1.outputs.aws_del_chamber }}
+
+        steps:
+          - name: Checkout code (pinned to commit SHA)
+            uses: actions/checkout@v3
+            with:
+                fetch-depth: 0
+                token: ${{ secrets.REPO_TOKEN }}
+                ref: ${{ needs.pre_chamber_deployment.outputs.commit_sha }}
+
+          - name: Checkout IaC files (pinned to commit SHA)
+            uses: actions/checkout@v3
+            with:
+                repository: IT/OnCloud_IaC_Github_Actions
+                path: ./OnCloud_IaC_Github_Actions
+                token: ${{ secrets.REPO_TOKEN }}
+                fetch-depth: 0
+                ref: ${{ needs.pre_chamber_deployment.outputs.commit_sha }}
+
+          - name: Setup Git Credentials
+            uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+            with:
+                credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+          - name: Get changed files
+            id: files
+            uses: ./OnCloud_IaC_Github_Actions/.github/actions/gh-action-get-changed-files-master
+            with:          
+                token: ${{ secrets.REPO_TOKEN }}
+
+          - name: files were added
+            if: ${{ contains(steps.files.outputs.added, '*.tfvars.json') || contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.added, 'delete_chamber') }}
+            run: |
+                echo "chdir=$(echo "${{ steps.files.outputs.added }}" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
+
+          - name: files were modified
+            if: ${{ contains(steps.files.outputs.modified, '*.tfvars.json') || contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.modified, 'delete_chamber') }} 
+            run: |
+                echo "chdir=$(echo "${{ steps.files.outputs.modified }}" | tr -d [] | awk 'BEGIN{FS=OFS=","} {for(i=1;i<=NF;i++) if ($i ~/add_chamber$/ || $i ~/delete_chamber$/) {print $i; exit}}' | cut -d'/' -f 5-7 )" >> $GITHUB_ENV
+
+          - name: Configure AWS credentials
+            uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+            with:
+                aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                aws-region: us-west-2
+
+          - name: Setup Terraform
+            uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-terraform-main
+            with:
+                terraform_version: 1.5.7
+
+          - name: Terragrunt Plan
+            if: ${{ contains(steps.files.outputs.added, 'add_chamber') || contains(steps.files.outputs.modified, 'add_chamber') }}
+            run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin plan
+            working-directory: ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
+
+          - name: Terragrunt Apply
+            if: ${{ success() && !(contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber')) && (contains(steps.files.outputs.modified, 'add_chamber') || contains(steps.files.outputs.added, 'add_chamber')) }}
+            run: /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin apply -auto-approve
+            working-directory: ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
+
+          - name: Terragrunt Destroy
+            if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp' && (contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber')) }} 
+            run: |
+                /gh-runner/bin/terragrunt --terragrunt-tfpath ${{ env.TERRAFORM_CLI_PATH }}/terraform-bin destroy -auto-approve
+            working-directory: ${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}
+
+          - id: step1
+            if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp-cc' && (contains(steps.files.outputs.added, 'delete_chamber') || contains(steps.files.outputs.modified, 'delete_chamber')) }}
+            run: |
+                del_chdir="${{ github.workspace }}/CustomerVPC/terraform/config/envs/${{ env.chdir }}"
+                echo "aws_del_chamber=$del_chdir" >> $GITHUB_OUTPUT
+
+  openstack_chamber_deployment:
+            runs-on: cloud30-docker-mvp
+            needs: [ pre_chamber_deployment, aws_chamber_deployment ]
+            if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp-cc' }}
+            environment: ${{ needs.pre_chamber_deployment.outputs.env_name }}
+            env:
+                OS_AUTH_URL: ${{ secrets[format('OS_AUTH_URL_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+                OS_USERNAME: ${{ secrets[format('OS_USERNAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+                OS_PASSWORD: ${{ secrets[format('OS_PASSWORD_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+                OS_PROJECT_NAME: ${{ secrets[format('OS_PROJECT_NAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+                OS_USER_DOMAIN_NAME: ${{ secrets[format('OS_USER_DOMAIN_NAME_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+                OS_COMPUTE_URL: ${{ secrets[format('OS_COMPUTE_URL_{0}', needs.pre_chamber_deployment.outputs.env_name)] }}
+                cc_id: ${{ needs.pre_chamber_deployment.outputs.cc_id }}
+                TF_CLI_CONFIG_FILE: ${{ secrets.TF_CLI_CONFIG_FILE }}
+            steps:
+              - name: Checkout root repo (locked to commit SHA)
+                uses: actions/checkout@v3
+                with:
+                    fetch-depth: 0
+                    token: ${{ secrets.REPO_TOKEN }}
+                    ref: ${{ needs.pre_chamber_deployment.outputs.commit_sha }}
+
+              - name: Checkout IaC Files
+                uses: actions/checkout@v3
+                with:
+                    repository: IT/OnCloud_IaC_Github_Actions
+                    path: ./OnCloud_IaC_Github_Actions
+                    token: ${{ secrets.REPO_TOKEN }}
+                    fetch-depth: 0
+                    ref: ${{ needs.pre_chamber_deployment.outputs.commit_sha }}
+
+              - name: Setup Git Credentials
+                uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+                with:
+                    credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+              - name: Configure AWS credentials
+                uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+                with:
+                    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                    aws-region: us-west-2
+
+              - name: Checkout OpenStack repo (locked to SHA)
+                uses: actions/checkout@v3
+                with:
+                    repository: IT/terraform-cadencecld-openstack
+                    path: ./terraform-cadencecld-openstack
+                    token: ${{ secrets.REPO_TOKEN }}
+                    fetch-depth: 0
+                    ref: ${{ needs.pre_chamber_deployment.outputs.commit_sha }}
+
+
