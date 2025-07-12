@@ -4,6 +4,96 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
 
+
+#!/bin/bash
+
+# Step 1: Setup test directories
+mkdir -p test/aws_tfvars
+mkdir -p test/terraform-cadencecld-openstack
+
+# Step 2: Create a mock AWS tfvars file
+cat > test/aws_tfvars/aw71.tfvars.json <<EOF
+{
+  "tags": {
+    "Environment": "Production"
+  },
+  "settings": {
+    "deployment_type": "some-type",
+    "cc_chamber": "oa41",
+    "cc_env": "prod"
+  }
+}
+EOF
+
+# Step 3: Create a mock changed_files.txt from OpenStack
+cat > test/terraform-cadencecld-openstack/changed_files.txt <<EOF
+CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
+CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/add_chamberfirst
+EOF
+
+# Step 4: Read and extract cc_chamber from AWS tfvars
+env_file="test/aws_tfvars/aw71.tfvars.json"
+aws_cc_chamber=$(jq -r '.settings.cc_chamber' "$env_file")
+echo "AWS cc_chamber from tfvars: $aws_cc_chamber"
+
+# Step 5: Read and extract OA chamber from changed_files.txt
+cc_file="test/terraform-cadencecld-openstack/changed_files.txt"
+os_chamber=$(grep -oE 'oa[0-9]+' "$cc_file" | head -n1)
+echo "OpenStack chamber from changed_files.txt: $os_chamber"
+
+# Step 6: Compare and validate
+if [[ "$aws_cc_chamber" != "$os_chamber" ]]; then
+  echo "ERROR: Mismatch - AWS tfvars expects '$aws_cc_chamber' but OpenStack changes show '$os_chamber'"
+  exit 1
+else
+  echo "SUCCESS: Valid match - '$aws_cc_chamber'"
+fi
+
+
+ chmod +x test_cc_chamber_validation.sh
+./test_cc_chamber_validation.sh
+
+
+
+root@LAPTOP-BALF36R8:~# cat yourscript.sh
+#!/bin/bash
+
+mkdir -p test/terraform-cadencecld-openstack
+cd test/terraform-cadencecld-openstack
+
+cat > changed_files.txt <<EOF
+CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
+EOF
+
+cat changed_files.txt
+
+os_chamber=$(grep -oE 'oa[0-9]+' changed_files.txt | head -n1)
+echo "Detected OpenStack chamber: $os_chamber"
+echo "os_chamber=$os_chamber" >> test_output.txt
+
+
+ bash yourscript.sh
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
  - name: Validate CC Chamber Match Between AWS tfvars and OpenStack changed_files.txt
         if: ${{ steps.step1.outputs.ccch != '' && env.cc_chdir != '' }}
         run: |
