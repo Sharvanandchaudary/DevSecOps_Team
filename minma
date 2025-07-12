@@ -2,3 +2,30 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/add_chamber
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
+
+
+ - name: Validate CC Chamber Match Between AWS tfvars and OpenStack changed_files.txt
+        if: ${{ steps.step1.outputs.ccch != '' && env.cc_chdir != '' }}
+        run: |
+            echo "Validating chamber mapping..."
+            aws_cc_chamber="${{ steps.step1.outputs.ccch }}"
+            echo "AWS tfvars cc_chamber: $aws_cc_chamber"
+
+            cc_file="./terraform-cadencecld-openstack/changed_files.txt"
+            if [ ! -f "$cc_file" ]; then
+            echo "ERROR: changed_files.txt not found at path: $cc_file"
+            exit 1
+            fi
+
+          
+            os_chamber=$(grep -oE 'oa[0-9]+' "$cc_file" | head -n1)
+            echo "Extracted OpenStack chamber from changed_files.txt: $os_chamber"
+
+            if [[ "$aws_cc_chamber" != "$os_chamber" ]]; then
+            echo "Mismatch detected:"
+            echo "AWS tfvars cc_chamber = '$aws_cc_chamber'"
+            echo "OpenStack changed path = '$os_chamber'"
+            exit 1
+            else
+            echo "Match successful: Both AWS and OpenStack indicate chamber '$aws_cc_chamber'"
+            fi
