@@ -3,6 +3,124 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
+name: Strict PR Validator (Internal Only)
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - review_requested
+      - edited
+
+concurrency:
+  group: pr-validator-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+
+    # Only re-run for meaningful edits (title or body changes)
+    if: |
+      github.event.action == 'opened' ||
+      github.event.action == 'reopened' ||
+      github.event.action == 'synchronize' ||
+      github.event.action == 'review_requested' ||
+      (
+        github.event.action == 'edited' &&
+        (
+          github.event.changes.title ||
+          github.event.changes.body
+        )
+      )
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Fetch PR Metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -s -H "Authorization: Bearer $GH_TOKEN" \
+               -H "Accept: application/vnd.github+json" \
+               "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+               -o pr.json
+
+      - name: Validate PR Fields
+        id: validation
+        run: |
+          echo "status=success" >> $GITHUB_OUTPUT
+          errors=""
+
+          title=$(jq -r .title pr.json)
+          if [[ ! "$title" =~ ^JIRA-[0-9]+:\  ]]; then
+            errors+="PR title must follow format: JIRA-123: Summary of change\n"
+          fi
+
+          body=$(jq -r .body pr.json)
+          echo "$body" > body.txt
+
+          if ! grep -q "## What is being done in this PR?" body.txt; then
+            errors+="Missing section: 'What is being done in this PR?'\n"
+          fi
+
+          if ! grep -qi "\- \[x\]" body.txt; then
+            errors+="Checklist is not completed. At least one item must be checked.\n"
+          fi
+
+          reviewers=$(jq '.requested_reviewers | length' pr.json)
+          team_reviewers=$(jq '.requested_teams | length' pr.json)
+          if [ "$reviewers" -eq 0 ] && [ "$team_reviewers" -eq 0 ]; then
+            errors+="At least one reviewer or team must be assigned.\n"
+          fi
+
+          if [ -n "$errors" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "$errors" > summary.txt
+            exit 1
+          else
+            echo "All validations passed." > summary.txt
+          fi
+
+      - name: Post PR Comment with Validation Summary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          body="Validation Summary for PR #${{ github.event.pull_request.number }}\n\n$(cat summary.txt)"
+          curl -s -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+            -d "$(jq -nc --arg body "$body" '{body: $body}')"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #!/bin/bash
