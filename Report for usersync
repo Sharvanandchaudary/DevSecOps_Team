@@ -1,0 +1,101 @@
+Implementation Report: Migrating Hardcoded Secrets in usersync to AWS Secrets Manager
+
+Objective:
+The goal of this implementation is to secure the sensitive credentials used by the usersync Go binary running on an EC2 instance. Currently, these credentials are stored in a plaintext environment file (app.env). This poses security risks. The solution involves migrating these secrets to AWS Secrets Manager and dynamically injecting them into the runtime environment during execution.
+
+Scenario Description:
+The usersync binary is a Go-based application located at /opt/usersync/usersync. It relies on environment variables such as CMN_DB_PSSWD, LDAP_PW_BASE, and CORPORATE_LDAP_PW to function. These were initially provided through a file located at /opt/usersync/app.env. A monitoring script (monitor_usersync.sh) runs every minute via cron to ensure the usersync binary is running. If not, it restarts it.
+The problem with the current setup is that secrets are hardcoded in a file accessible on disk, leading to potential exposure. The improved solution removes this file and instead securely fetches the secrets from AWS Secrets Manager using the AWS CLI.
+
+Solution Overview:
+Identify all required secrets currently stored in the app.env file.
+Store these secrets in AWS Secrets Manager in JSON format.
+Modify the monitoring script to fetch the secrets at runtime and export them as environment variables.
+Ensure the EC2 instance has an appropriate IAM role to access AWS Secrets Manager.
+Remove the dependency on the local environment file.
+
+Step-by-Step Implementation:
+Step 1: Extract Secrets from app.env
+Example of original contents:
+
+CMN_DB_NAME="cmldsdb"
+CMN_DB_USER="admin"
+CMN_DB_PSSWD="DB91234!"
+CORPORATE_LDAP_PW="a~3pXi3hRMwV280DF3t9Y2S%F"
+LDAP_PW_BASE="ZGl1M0h0dXZvSM"
+
+Step 2: Store Secrets in AWS Secrets Manager
+Run the following command from an AWS CLI-configured machine:
+aws secretsmanager create-secret --name usersync/secrets --secret-string '{
+"CMN_DB_NAME":"cmldsdb",
+"CMN_DB_USER":"admin",
+"CMN_DB_PSSWD":"DB91234!",
+"CORPORATE_LDAP_PW":"a~3pXi3hRMwV280DF3t9Y2S%F",
+"LDAP_PW_BASE":"ZGl1M0h0dXZvSM"
+}'
+
+Step 3: Update IAM Role for EC2
+Attach an IAM role to the EC2 instance with permissions to access the secret:
+
+{
+"Version": "2012-10-17",
+"Statement": [
+{
+"Effect": "Allow",
+"Action": "secretsmanager:GetSecretValue",
+"Resource": "*"
+}
+]
+}
+
+Step 4: Modify monitor_usersync.sh Script
+#!/bin/bash
+
+if pgrep -x "usersync" > /dev/null; then
+echo "usersync is running"
+else
+echo "usersync is not running"
+
+secret=$(aws secretsmanager get-secret-value \
+  --secret-id usersync/secrets \
+  --query SecretString \
+  --output text)
+
+export CMN_DB_NAME=$(echo "$secret" | jq -r .CMN_DB_NAME)
+export CMN_DB_USER=$(echo "$secret" | jq -r .CMN_DB_USER)
+export CMN_DB_PSSWD=$(echo "$secret" | jq -r .CMN_DB_PSSWD)
+export CORPORATE_LDAP_PW=$(echo "$secret" | jq -r .CORPORATE_LDAP_PW)
+export LDAP_PW_BASE=$(echo "$secret" | jq -r .LDAP_PW_BASE)
+
+cd /opt/usersync
+rm -f /run/ldap_user_sync.pid
+chmod +x usersync
+./usersync >> /var/log/usersync/usersync.log 2>&1
+
+fi
+
+Ensure jq is installed:
+sudo apt install jq -y
+
+Step 5: Remove app.env File
+Once the new setup is verified:
+mv /opt/usersync/app.env /opt/usersync/app.env.bak
+
+Validation Steps:
+Check IAM role has correct permission.
+Run aws secretsmanager get-secret-value manually from EC2.
+Trigger the script and ensure usersync picks up secrets dynamically.
+Confirm the cron job continues to function.
+
+Security Benefits:
+Secrets are encrypted and access-controlled.
+No plaintext files on disk.
+Supports secret rotation and versioning.
+
+Future Enhancements:
+Enable automatic secret rotation.
+Convert the script to a systemd service.
+Add monitoring for failures or permission issues.
+
+Conclusion:
+The new design ensures secure, dynamic retrieval of secrets needed by the usersync Go binary without code modification. This approach is scalable, secure, and aligns with best practices for secret management.
