@@ -3,6 +3,47 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
+
+
+
+
+
+
+
+
+
+
+ChatGPT said:
+Sure. Here's the plain text version of the Jira comment you can copy and paste directly:
+
+Hi team,
+
+To ensure consistent and high-quality pull requests, we have implemented a new GitHub Actions-based PR Checklist and Reviewer Validation Workflow.
+
+This workflow enforces key contribution standards:
+
+PRs must include a completed checklist using "- [x]"
+
+At least one reviewer (user or team) must be assigned
+
+It runs when a PR is opened, edited (title or body), reopened, updated with new commits, or when reviewers are requested
+
+If any requirement is missing, the workflow fails and posts a comment on the PR
+
+This workflow is integrated with CODEOWNERS and GitHub branch protection rules to enforce peer review and quality control across all repositories and branches.
+
+You can find the full documentation at the link below:
+
+PR Checklist & Reviewer Validation Workflow Documentation: [INSERT LINK HERE]
+
+Let me know if you have any questions or feedback.
+
+
+
+
+
+
+
 name: Strict PR Validator (Internal Only)
 
 on:
