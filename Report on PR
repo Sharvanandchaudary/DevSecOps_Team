@@ -1,0 +1,174 @@
+Title: PR Checklist and Reviewer Validation Workflow
+
+Objective:
+This workflow is designed to ensure that all pull requests meet specific contribution standards before being merged. It performs two key validations:
+Confirms the PR description contains a completed checklist.
+Ensures that at least one reviewer (individual or team) is assigned.
+This enhances code quality, enforces team review policies, and prevents incomplete or unreviewed changes from being merged into important branches.
+
+Trigger Events:
+The workflow runs on the following pull request activities:
+when a pull request is opened
+when a pull request is edited (title or body)
+when a pull request is reopened
+when new commits are pushed to the pull request (synchronize)
+when reviewers are requested
+
+Concurrency:
+To avoid duplicate runs for the same pull request, concurrency is used. If a new run starts while a previous one is still executing for the same PR number, the earlier one is canceled. This ensures only the latest version is validated.
+
+Workflow Steps:
+Checkout the PR code using actions/checkout@v3.
+Use actions/github-script to run a Node.js script that:
+Fetches the pull request body and the list of assigned reviewers.
+Checks for a markdown checklist marked as completed (looks for "- [x]").
+Verifies that at least one reviewer or team is assigned.
+If any of the checks fail, the workflow fails and displays a clear message to the contributor.
+
+Checklist Validation:
+The PR body must contain at least one item marked as completed using the syntax "- [x]".
+This encourages contributors to self-verify that important steps (like testing or documentation) have been completed.
+
+Reviewer Validation:
+At least one GitHub user or team must be assigned to review the PR.
+If no reviewers are assigned, the workflow fails with a message asking the contributor to assign a reviewer.
+
+Where to Use This Workflow:
+This workflow should be present in all active development branches and protected deployment branches, including but not limited to:
+
+main
+release branches (e.g., release/v1.0)
+any environment-specific branches used for staging or testing
+It should be active in any repository where code contributions are made via pull requests.
+
+CODEOWNERS Configuration:
+To automate reviewer assignment and enforce review responsibilities, create a CODEOWNERS file at the root or inside the .github/ directory with the following syntax:
+
+Example:
+* @org/team-reviewers
+src/api/* @org/backend-reviewers
+docs/* @org/docs-team
+When a pull request touches any files matching the patterns, the listed users or teams are automatically requested as reviewers.
+                                                     
+Branch Protection Setup:
+To enforce the checks and prevent merging incomplete or unreviewed PRs, enable branch protection rules.
+                                                     
+Steps to enable branch protection:
+Go to the GitHub repository.
+Navigate to Settings > Branches.
+Under Branch protection rules, click Add rule.
+Set a branch pattern such as main or release/*.
+
+Enable the following options:
+Require a pull request before merging.
+Require approvals (minimum one or more).
+Require review from code owners.
+Require status checks to pass before merging.
+
+Select the checkbox for the checklist validation workflow.
+Require branches to be up to date before merging.
+Optionally, include administrators in the rule.
+
+Save the rule.
+
+Strategy:
+Developers create or update pull requests targeting a protected branch.
+The checklist validator runs automatically.
+If the checklist is incomplete or reviewers are missing, the PR cannot be merged.
+Once all validations pass and the PR is reviewed, it can be safely merged.
+
+Add commit message validations.
+Auto-comment on PRs that fail validation with guidance on how to fix.
+
+Summary:
+This workflow helps maintain high-quality pull requests by ensuring that contributors complete a checklist and assign reviewers. By combining this with GitHub's branch protection rules and CODEOWNERS configuration, teams can automate and enforce best practices across all repositories and branches.
+
+
+
+name: Enhanced PR Checklist Validator
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - review_requested
+
+concurrency:
+  group: pr-checklist-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-checklist:
+    runs-on: gh-runner-k8-oncloud-iac-test
+
+    if: |
+      github.event.action == 'opened' ||
+      github.event.action == 'synchronize' ||
+      github.event.action == 'review_requested' ||
+      (
+        github.event.action == 'edited' &&
+        (
+          github.event.changes.body ||
+          github.event.changes.title
+        )
+      )
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v3
+
+      - name: Validate Checklist and Reviewer Assignment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const body = pr.data.body || "";
+            const reviewers = pr.data.requested_reviewers || [];
+            const teamReviewers = pr.data.requested_teams || [];
+
+            let errors = [];
+
+            // Validate checklist
+            const checklistPattern = /- \[x\]/gi;
+            const matches = body.match(checklistPattern);
+            if (!matches || matches.length < 1) {
+              errors.push("PR checklist is incomplete. Please check all required items in the PR description.");
+            }
+
+            // Validate reviewer assignment
+            if (reviewers.length === 0 && teamReviewers.length === 0) {
+              errors.push("No reviewers assigned to this PR. Please assign at least one reviewer or team.");
+            }
+
+            if (errors.length > 0) {
+              const errorMessage = errors.join("\n\n");
+
+              // Post comment to PR
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `Validation failed for this pull request.\n\n${errorMessage}\n\nPlease update the pull request and re-run the checks.`
+              });
+
+              core.setFailed(errorMessage);
+            } else {
+              console.log("Validation passed. PR checklist is complete and reviewers are assigned.");
+            }
+
+
+
+
+
+
+   
