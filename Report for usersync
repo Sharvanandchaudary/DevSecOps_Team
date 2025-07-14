@@ -106,7 +106,11 @@ https://lucid.app/lucidchart/0da7aafc-148a-4c01-b2c7-b1578dcac621/edit?invitatio
 
 
 
+A detailed documentation has been created outlining the proposed approach to migrate hardcoded secrets used by the usersync application to AWS Secrets Manager. The document includes the current architecture, security concerns, proposed solution, IAM configuration, updated script logic, and validation steps.
 
+This documentation serves as a reference and is not yet implemented in any environment.
+
+Link to the architecture and implementation plan:
 
 
 
