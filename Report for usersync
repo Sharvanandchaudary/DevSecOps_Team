@@ -99,3 +99,17 @@ Add monitoring for failures or permission issues.
 
 Conclusion:
 The new design ensures secure, dynamic retrieval of secrets needed by the usersync Go binary without code modification. This approach is scalable, secure, and aligns with best practices for secret management.
+
+
+
+https://lucid.app/lucidchart/0da7aafc-148a-4c01-b2c7-b1578dcac621/edit?invitationId=inv_8198b149-e03f-4d63-8458-d4bc1660ffaa&page=0_0#
+
+
+
+
+
+
+
+
+
+
