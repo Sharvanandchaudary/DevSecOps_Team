@@ -1,0 +1,52 @@
+Daily Status Report – [Date]
+
+Goal:
+
+Preview and understand the pipeline through the VCAT portal (WCAG portal access).
+
+Explore the full flow of terminating an existing chamber and deploying a new chamber through the portal.
+
+Test the Teradion CLA workflow within the portal to understand how workflows are triggered and monitored.
+
+Investigate issues encountered while deleting a chamber and working through deployment errors.
+
+Perform a walkthrough of the existing Kubernetes cluster hosting GitHub Actions runners.
+
+Review and understand the XA‑1 repository and its integration with cluster deployments.
+
+Work Done:
+
+Accessed the VCAT/WCAG portal and navigated through its main sections:
+
+Verified available chambers and their current status.
+
+Explored the pipeline view to understand which stages handle validation, deployment, and test automation.
+
+Chamber Termination & Deployment Flow:
+
+Followed the documented process to terminate an existing chamber from the portal interface.
+
+Observed how the chamber state changes and which backend steps are triggered during termination (cleanup of resources, runner detachment, etc.).
+
+Initiated the deployment of a new chamber through the same portal, noting required inputs (chamber ID, target environment) and how the pipeline progresses through provisioning and configuration.
+
+Captured key steps where approvals or validations are required.
+
+Encountered and troubleshot issues when deleting a chamber:
+
+A chamber deletion did not fully complete, leading to residual configurations that blocked a redeployment.
+
+Spent time investigating logs and portal error messages, working through these issues to allow a clean termination and redeployment process.
+
+Ran the Teradion CLA workflow within the portal and analyzed the logs to see where artifacts were built, validated, and passed to deployment.
+
+Performed a walkthrough of the existing Kubernetes cluster:
+
+Reviewed runner namespaces, deployment configuration (RunnerDeployment objects), and how scaling is controlled.
+
+Verified pods and checked controller logs for active workflows.
+
+Explored the XA‑1 repository:
+
+Looked into its folder structure, manifests, and integration points with the VCAT portal and Kubernetes cluster.
+
