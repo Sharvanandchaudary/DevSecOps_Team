@@ -3,7 +3,15 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
-
+0s
+0s
+0s
+0s
+Run aws_cc_chamber="tn07"
+AWS cc_chamber: tn07
+OpenStack chamber: tn03
+MISMATCH: AWS expects 'tn07' but OpenStack has 'tn03'
+Error: Process completed with exit code 1.
 
 
 -aws_chamber_deployment:
