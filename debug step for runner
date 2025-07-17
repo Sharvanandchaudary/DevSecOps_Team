@@ -1,0 +1,9 @@
+  - name: Show runner information
+        run: |
+          echo "==== RUNNER INFO (pre_chamber_deployment) ===="
+          echo "Runner Name: $RUNNER_NAME"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner Arch: $RUNNER_ARCH"
+          echo "Commit SHA: $GITHUB_SHA"
+          echo "Run ID: $GITHUB_RUN_ID"
+          echo "Concurrency Group: deploy-${GITHUB_SHA}"
