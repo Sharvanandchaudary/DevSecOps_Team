@@ -1,0 +1,134 @@
+In scenarios where GitHub’s native cache or artifact services cannot be used (for example, due to network restrictions or the need for cross‑run persistence), Amazon S3 can serve as a reliable external storage for artifacts such as changed_files.txt.
+
+2. What You Need
+a. AWS Account and S3 Bucket
+An AWS account with an existing S3 bucket or permission to create one.
+
+Example bucket name: my-artifact-storage.
+
+b. IAM Credentials
+Access key and secret key with permissions to:
+
+s3:GetObject
+
+s3:PutObject
+
+Example IAM policy snippet:
+
+json
+Copy
+Edit
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::my-artifact-storage/*"
+    }
+  ]
+}
+c. Runner network access
+The runner must be able to reach S3:
+
+Public internet, or
+
+An S3 VPC endpoint if running in a private VPC.
+
+3. How to Configure
+Step 1: Configure AWS credentials
+Use the official AWS credentials action in your workflow:
+
+yaml
+Copy
+Edit
+- name: Configure AWS credentials
+  uses: aws-actions/configure-aws-credentials@v4
+  with:
+    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    aws-region: us-west-2
+Store these credentials in your repository secrets:
+
+AWS_ACCESS_KEY_ID
+
+AWS_SECRET_ACCESS_KEY
+
+4. Dynamic Paths and Keys
+Use the commit SHA or another unique identifier as the dynamic path for storing artifacts.
+For example:
+
+bash
+Copy
+Edit
+s3://my-artifact-storage/changed-files/<commit-sha>/changed_files.txt
+In your workflow, you can reference:
+
+yaml
+Copy
+Edit
+ref: ${{ github.sha }}
+or from a step output:
+
+yaml
+Copy
+Edit
+${{ steps.commit_sha.outputs.sha }}
+This ensures each workflow run’s artifact is isolated.
+
+5. Uploading Artifacts to S3
+After generating your artifact (e.g., changed_files.txt):
+
+yaml
+Copy
+Edit
+- name: Upload changed_files.txt to S3
+  run: |
+    aws s3 cp ./terraform-cadencecld-openstack/changed_files.txt \
+    s3://my-artifact-storage/changed-files/${{ steps.commit_sha.outputs.sha }}/changed_files.txt
+6. Retrieving Artifacts from S3
+On a rerun or later workflow, download before regenerating:
+
+yaml
+Copy
+Edit
+- name: Download changed_files.txt from S3
+  id: s3download
+  continue-on-error: true
+  run: |
+    aws s3 cp \
+    s3://my-artifact-storage/changed-files/${{ steps.commit_sha.outputs.sha }}/changed_files.txt \
+    ./terraform-cadencecld-openstack/changed_files.txt || true
+7. Conditional Logic for Reuse
+After download, check if the file exists:
+
+yaml
+Copy
+Edit
+- name: Check if changed_files.txt exists
+  id: check_changed_file
+  run: |
+    if [ -f "./terraform-cadencecld-openstack/changed_files.txt" ]; then
+      echo "exists=true" >> $GITHUB_OUTPUT
+    else
+      echo "exists=false" >> $GITHUB_OUTPUT
+    fi
+Only regenerate and re‑upload if not found:
+
+yaml
+Copy
+Edit
+- name: Generate changed_files.txt
+  if: steps.check_changed_file.outputs.exists == 'false'
+  run: |
+    cd terraform-cadencecld-openstack
+    git diff --name-only HEAD~1..HEAD > changed_files.txt
+
+- name: Upload changed_files.txt to S3
+  if: steps.check_changed_file.outputs.exists == 'false'
+  run: |
+    aws s3 cp ./terraform-cadencecld-openstack/changed_files.txt \
+    s3://my-artifact-storage/changed-files/${{ steps.commit_sha.outputs.sha }}/changed_files.txt
