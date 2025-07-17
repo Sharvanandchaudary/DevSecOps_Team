@@ -3,7 +3,120 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
-0s
+0
+
+
+jobs:
+  pre_chamber_deployment:
+    runs-on: cloud30-docker-mvp
+    outputs:
+      rname: ${{ steps.step1.outputs.ccid }}
+      cc_chamber_chdir: ${{ steps.step2.outputs.cc_chamber_path }}
+      cc_changed_files: ${{ steps.step2.outputs.cc_added_files }}
+      env_name: ${{ steps.step2.outputs.en_name }}
+      cc_id: ${{ steps.step1.outputs.cc_chamber_id }}
+      commit_sha: ${{ steps.commit_sha.outputs.sha }}
+      os_chamber: ${{ steps.ccfiles.outputs.os_chamber }}
+      os_sha: ${{ steps.os_sha.outputs.sha }}
+    steps:
+      - name: Checkout AWS repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Output AWS current SHA
+        id: commit_sha
+        run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Checkout OnCloud IaC Actions
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Git Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+        with:
+          credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+      - name: Checkout OpenStack repo
+        uses: actions/checkout@v3
+        with:
+          repository: IT/terraform-cadencecld-openstack
+          path: terraform-cadencecld-openstack
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+          ref: Release_test
+
+      - name: Get OpenStack SHA
+        id: os_sha
+        run: |
+          cd terraform-cadencecld-openstack
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      # Try to download previous artifact first
+      - name: Download changed_files.txt from previous run
+        id: download_changed_files
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: openstack-changed-files
+          path: terraform-cadencecld-openstack
+
+      # Check if the file exists after download
+      - name: Check if changed_files.txt exists
+        id: check_changed_file
+        run: |
+          if [ -f "terraform-cadencecld-openstack/changed_files.txt" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Generate only if artifact not found
+      - name: Generate CC changed files
+        id: ccfiles
+        if: steps.check_changed_file.outputs.exists == 'false'
+        run: |
+          cd terraform-cadencecld-openstack
+          git diff --name-only HEAD~1..HEAD > changed_files.txt
+          cat changed_files.txt
+          os_chamber=$(grep -oE 'tn[0-9]+' changed_files.txt | head -n1)
+          echo "os_chamber=$os_chamber" >> $GITHUB_OUTPUT
+          list=$(cat changed_files.txt | tr '\n' ',')
+          echo "added=$list" >> $GITHUB_ENV
+
+      # Upload artifact only if we generated it
+      - name: Upload changed_files.txt artifact
+        if: steps.check_changed_file.outputs.exists == 'false'
+        uses: actions/upload-artifact@v3
+        with:
+          name: openstack-changed-files
+          path: terraform-cadencecld-openstack/changed_files.txt
+
+      - name: Debug os_chamber
+        run: echo "os_chamber=${{ steps.ccfiles.outputs.os_chamber }}"
+
+      # ... your existing AWS file detection, step1/step2, and validation follow ...
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 0s
 0s
 0s
