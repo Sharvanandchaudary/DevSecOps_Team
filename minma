@@ -5,6 +5,158 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
 0
 
+
+jobs:
+  pre_chamber_deployment:
+    runs-on: cloud30-docker-mvp
+    outputs:
+      rname: ${{ steps.step1.outputs.ccid }}
+      cc_chamber_chdir: ${{ steps.step2.outputs.cc_chamber_path }}
+      cc_changed_files: ${{ steps.step2.outputs.cc_added_files }}
+      env_name: ${{ steps.step2.outputs.en_name }}
+      cc_id: ${{ steps.step1.outputs.cc_chamber_id }}
+      commit_sha: ${{ steps.commit_sha.outputs.sha }}
+      os_sha: ${{ steps.capture_os_sha.outputs.sha }}
+      os_chamber: ${{ steps.generate_cc_changed_files.outputs.os_chamber }}
+      cc_chamber_id: ${{ steps.step1.outputs.cc_chamber_id }}
+
+    steps:
+      # ----- AWS repo checkout -----
+      - name: Checkout AWS repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Output AWS SHA
+        id: commit_sha
+        run: echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      # ----- Debug: Runner info -----
+      - name: Debug Runner Info
+        run: |
+          echo "==== RUNNER INFO (pre_chamber_deployment) ===="
+          echo "Runner Name: $RUNNER_NAME"
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner Arch: $RUNNER_ARCH"
+          echo "AWS Commit SHA: ${{ github.sha }}"
+          echo "Run ID: $GITHUB_RUN_ID"
+          echo "Concurrency Group: deploy-${GITHUB_SHA}"
+
+      # ----- Checkout shared action files -----
+      - name: Checkout shared action files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Setup Git Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+        with:
+          credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+      # ----- OpenStack repo checkout -----
+      - name: Checkout OpenStack TF repo
+        uses: actions/checkout@v3
+        with:
+          repository: IT/terraform-cadencecld-openstack
+          path: ./terraform-cadencecld-openstack
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+          ref: Release_test
+
+      # ----- Capture OpenStack SHA -----
+      - name: Capture OpenStack SHA
+        id: capture_os_sha
+        run: |
+          cd terraform-cadencecld-openstack
+          current_sha=$(git rev-parse HEAD)
+          echo "sha=$current_sha" >> $GITHUB_OUTPUT
+          echo "Captured OpenStack SHA: $current_sha"
+          echo "==== DEBUG GIT LOG HEAD ===="
+          git log -n 3 --oneline
+
+      # ----- Simulate delay (sleep) -----
+      - name: Simulate delay
+        run: |
+          echo "Sleeping 120 seconds to simulate overlap..."
+          sleep 120
+
+      # ----- Debug: confirm SHA after sleep -----
+      - name: Debug OpenStack SHA after sleep
+        run: |
+          cd terraform-cadencecld-openstack
+          echo "Current HEAD SHA: $(git rev-parse HEAD)"
+          echo "Expected pinned SHA: ${{ steps.capture_os_sha.outputs.sha }}"
+
+      # ----- Restore cache -----
+      - name: Restore changed files cache
+        id: cache-cc-changed-files
+        uses: actions/cache@v3
+        with:
+          path: ./terraform-cadencecld-openstack/changed_files.txt
+          key: cc-changed-files-${{ github.sha }}
+
+      - name: Debug cache status
+        run: |
+          echo "Cache hit: ${{ steps.cache-cc-changed-files.outputs.cache-hit }}"
+
+      # ----- Generate changed files (pinned SHA) -----
+      - name: Generate changed files pinned to captured SHA
+        id: generate_cc_changed_files
+        if: steps.cache-cc-changed-files.outputs.cache-hit != 'true'
+        run: |
+          cd terraform-cadencecld-openstack
+          echo "Generating diff from pinned SHA ${{ steps.capture_os_sha.outputs.sha }}"
+          git fetch origin ${{ steps.capture_os_sha.outputs.sha }}
+          git diff --name-only ${{ steps.capture_os_sha.outputs.sha }}~1 ${{ steps.capture_os_sha.outputs.sha }} > changed_files.txt
+          echo "==== DEBUG changed_files.txt ===="
+          cat changed_files.txt
+          os_chamber=$(grep -oE 'tn[0-9]+' changed_files.txt | head -n1 || true)
+          echo "os_chamber=$os_chamber" >> $GITHUB_OUTPUT
+          list=$(cat changed_files.txt | tr '\n' ',')
+          echo "added=$list" >> $GITHUB_ENV
+
+      # ----- Save cache -----
+      - name: Save changed files cache
+        if: steps.cache-cc-changed-files.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: ./terraform-cadencecld-openstack/changed_files.txt
+          key: cc-changed-files-${{ github.sha }}
+
+      # ----- Debug final outputs -----
+      - name: Debug final outputs
+        run: |
+          echo "Captured OpenStack SHA (os_sha): ${{ steps.capture_os_sha.outputs.sha }}"
+          echo "os_chamber detected: ${{ steps.generate_cc_changed_files.outputs.os_chamber }}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 0s
 Run actions/download-artifact@v3
 Starting download for openstack-changed-files
