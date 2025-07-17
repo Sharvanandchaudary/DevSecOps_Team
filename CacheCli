@@ -1,15 +1,15 @@
 0s
-Run actions/download-artifact@v3
-Starting download for openstack-changed-files
-Error: Unable to find any artifacts for the associated workflow
+11s
+Run ./OnCloud_IaC_Github_Actions/.github/actions/cache/restore
+Warning: Failed to restore: downloadCache failed: write EPROTO 40AC9500F27F0000:error:0A00010B:SSL routines:ssl3_get_record:wrong version number:../deps/openssl/openssl/ssl/record/ssl3_record.c:354:
+
+Cache not found for input keys: cc-changed-files-1eabd86af3d01eb73d7c89b6e5e763118d9fd44e, cc-changed-files-
 0s
-Run if [ -f "terraform-cadencecld-openstack/changed_files.txt" ]; then
-  
 0s
-Run cd terraform-cadencecld-openstack
-CustomerVPC/terraform/config/envs/non-prod/qa/test-1/tn03/delete_chamber
-1s
-Run actions/upload-artifact@v3
+Run ./OnCloud_IaC_Github_Actions/.github/actions/cache/save
+/usr/bin/tar --posix -cf cache.tgz --exclude cache.tgz -P -C /gh-runner/_work/terraform-cloud30v2-aws/terraform-cloud30v2-aws --files-from manifest.txt -z
+Failed to save: Unable to reserve cache with key cc-changed-files-1eabd86af3d01eb73d7c89b6e5e763118d9fd44e, another job may be creating this cache. More details: Cache already exists. Scope: refs/heads/Release_test, Key: cc-changed-files-1eabd86af3d01eb73d7c89b6e5e763118d9fd44e, Version: 4ce9a45653cfbe76d235e4b3e122e576ad2af53ca5b46b2aeb95113e5843d71e
+Warning: Cache save failed.
   
 With the provided path, there will be 1 file uploaded
 Starting artifact upload
