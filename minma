@@ -5,6 +5,37 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
 
 
+  openstack_chamber_deployment:
+    runs-on: cloud30-docker-mvp
+    needs: [ pre_chamber_deployment, aws_chamber_deployment ]
+    if: ${{ needs.pre_chamber_deployment.outputs.rname == 'mvp-cc' }}
+    steps:
+      - name: Checkout OpenStack repo pinned to SHA
+        uses: actions/checkout@v3
+        with:
+          repository: IT/terraform-cadencecld-openstack
+          path: terraform-cadencecld-openstack
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ needs.pre_chamber_deployment.outputs.os_sha }}
+
+      - name: Debug OpenStack checkout
+        run: |
+          echo "==== DEBUG: OpenStack Checkout ===="
+          cd terraform-cadencecld-openstack
+          echo "Current HEAD SHA after checkout:"
+          git rev-parse HEAD
+          echo "Expected SHA from pre_chamber_deployment:"
+          echo "${{ needs.pre_chamber_deployment.outputs.os_sha }}"
+          echo "Last 3 commits in repo:"
+          git log -3 --oneline
+
+
+
+
+
+
+
 
     - name: Checkout the files
       uses: actions/checkout@v3
