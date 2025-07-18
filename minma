@@ -3,7 +3,51 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
-0
+
+
+
+    - name: Checkout the files
+      uses: actions/checkout@v3
+      with:
+        repository: IT/terraform-cadencecld-openstack
+        path: ./terraform-cadencecld-openstack
+        token: ${{ secrets.REPO_TOKEN }} 
+        fetch-depth: 0    
+        ref: ${{ needs.pre_chamber_deployment.outputs.capture_os_sha }} 
+
+
+
+Run actions/checkout@v3
+Syncing repository: IT/terraform-***cld-openstack
+Getting Git version info
+Copying '/ghrunner/.gitconfig' to '/gh-runner/_work/_temp/4977d108-37cd-4e1d-b5bb-d1a0948d40c7/.gitconfig'
+Temporarily overriding HOME='/gh-runner/_work/_temp/4977d108-37cd-4e1d-b5bb-d1a0948d40c7' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+/usr/bin/git config --global --add safe.directory /gh-runner/_work/terraform-cloud30v2-aws/terraform-cloud30v2-aws/terraform-***cld-openstack
+Initializing the repository
+Disabling automatic garbage collection
+Setting up auth
+Determining the *** branch
+Fetching the repository
+Determining the checkout info
+Checking out the ref
+  /usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+  Switched to a new branch 'main'
+  branch 'main' set up to track 'origin/main'.
+/usr/bin/git log -1 --format='%H'
+'31cc3ce87da4ea70d8e2965415223d1d30346172'
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 jobs:
