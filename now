@@ -1,52 +1,23 @@
-Daily Status Report – [Date]
-
+Date: 7/16
 Goal:
+Establish a reliable mechanism in the workflow to pick the exact commit SHA and isolate the corresponding chamber values. Begin implementing validation checks to ensure that the workflow only proceeds when the chamber values match the expected configuration.
 
-Preview and understand the pipeline through the VCAT portal (WCAG portal access).
+Work Done:
+Implemented logic to capture the commit SHA immediately after checkout and pass it as a reference throughout the workflow.
+Updated the validation script to cross‑verify the captured SHA against the chamber configuration, ensuring the workflow does not pick stale or incorrect chamber values.
+Introduced additional logging and debug outputs to monitor which SHA and chamber values are being used at every step.
+Ran multiple controlled test triggers of the workflow at one‑minute intervals to observe behavior and ensure isolation is working as intended.
+Documented results from each run and adjusted the validation conditions to handle edge cases where new commits arrive in quick succession.
 
-Explore the full flow of terminating an existing chamber and deploying a new chamber through the portal.
-
-Test the Teradion CLA workflow within the portal to understand how workflows are triggered and monitored.
-
-Investigate issues encountered while deleting a chamber and working through deployment errors.
-
-Perform a walkthrough of the existing Kubernetes cluster hosting GitHub Actions runners.
-
-Review and understand the XA‑1 repository and its integration with cluster deployments.
+Date: 7/17
+Goal:
+Ensure that parallel deployments are fully isolated by using concurrency controls, finalize the validation logic, and thoroughly test the workflow under rapid and repeated triggers.
 
 Work Done:
 
-Accessed the VCAT/WCAG portal and navigated through its main sections:
-
-Verified available chambers and their current status.
-
-Explored the pipeline view to understand which stages handle validation, deployment, and test automation.
-
-Chamber Termination & Deployment Flow:
-
-Followed the documented process to terminate an existing chamber from the portal interface.
-
-Observed how the chamber state changes and which backend steps are triggered during termination (cleanup of resources, runner detachment, etc.).
-
-Initiated the deployment of a new chamber through the same portal, noting required inputs (chamber ID, target environment) and how the pipeline progresses through provisioning and configuration.
-
-Captured key steps where approvals or validations are required.
-
-Encountered and troubleshot issues when deleting a chamber:
-
-A chamber deletion did not fully complete, leading to residual configurations that blocked a redeployment.
-
-Spent time investigating logs and portal error messages, working through these issues to allow a clean termination and redeployment process.
-
-Ran the Teradion CLA workflow within the portal and analyzed the logs to see where artifacts were built, validated, and passed to deployment.
-
-Performed a walkthrough of the existing Kubernetes cluster:
-
-Reviewed runner namespaces, deployment configuration (RunnerDeployment objects), and how scaling is controlled.
-
-Verified pods and checked controller logs for active workflows.
-
-Explored the XA‑1 repository:
-
-Looked into its folder structure, manifests, and integration points with the VCAT portal and Kubernetes cluster.
+Added a concurrency block in the GitHub Actions workflow, using a unique key derived from commit SHA and chamber ID to prevent overlapping runs from interfering with each other.
+Enhanced validation steps to include explicit checks for chamber IDs, environment variables, and output artifacts, ensuring they match the commit under test.
+Re‑tested the workflow by triggering parallel deployments at short intervals, confirming that each run operated in its own isolated context without picking incorrect values.
+Integrated all improvements into the main workflow and performed end‑to‑end tests every minute for an extended period to confirm stability and reliability.
+Prepared internal notes detailing the implementation changes, observed results, and recommended follow‑up actions for future enhancements.
 
