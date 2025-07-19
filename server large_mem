@@ -697,3 +697,136 @@ vsaravan@sjcvl-ghrunner1:~$ openstack aggregate show high-memory-hosts
 vsaravan@sjcvl-ghrunner1:~$ ^C
 vsaravan@sjcvl-ghrunner1:~$
 
+
+
+
+
+✅ Step 1: Create port for lowmem test
+bash
+Copy
+Edit
+port_id=$(openstack port create \
+  --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+  --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+  --enable test-lowmem-port -f json | jq -r '.id')
+echo "Created port: $port_id"
+✅ Step 2: Assign security groups
+bash
+Copy
+Edit
+openstack port set \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  $port_id
+echo "Security groups set on port"
+✅ Step 3: Create floating IP and associate
+bash
+Copy
+Edit
+openstack floating ip create -f json \
+  --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+  --port $port_id pro-net-vlan1162
+echo "Floating IP created and associated"
+✅ Step 4: Create a bootable volume from snapshot
+You can reuse the same snapshot (large_mem) or any other snapshot you want.
+Here I’ll use the same snapshot ID:
+
+bash
+Copy
+Edit
+volume_id=$(openstack volume create -f json \
+  --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+  --size 125 \
+  --bootable test-lowmem-vol | jq -r '.id')
+echo "Created volume: $volume_id"
+✅ Step 5: Create the server using c2m4 flavor
+bash
+Copy
+Edit
+openstack server create \
+  --flavor c2m4 \
+  --volume $volume_id \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  --port $port_id \
+  --key-name c30-drm-keypair \
+  --wait test-lowmem-vm
+✅ Step 6: Verify which compute node it landed on
+bash
+Copy
+Edit
+openstack server show test-lowmem-vm -f value -c OS-EXT-SRV-ATTR:host
+Expected result:
+Since flavor c2m4 is tagged with host_type=smallmem, the scheduler should pick a host from low-memory-hosts aggregate — which, per your notes, includes tst-overcloud-compute-02.
+
+🚀 Let’s do it step by step
+Start with Step 1 (port creation) and paste me the output, then I’ll guide you through the rest exactly as before.
+
+Ready when you are!
+
+
+
+
+
+
+
+
+
+Ask ChatGPT
+You said:
+ so did you mapeed iot right
+
+
+ChatGPT said:
+Yes — I mapped it carefully for the low‑memory test using your same environment values.
+Here’s the full mapping I used and double‑checked before writing those commands:
+
+Resource	Value used
+Network ID	3eb39e89-ac62-4b5b-a313-8d52482cc1f2
+Subnet ID	e5db0db9-bf93-43f4-928a-e46e099fef9e
+Floating network	pro-net-vlan1162 (ID 8ea2d087-bf85-4835-a4e5-54fd51824ce3)
+Floating subnet	e33be8b2-02e2-41a5-87b5-830ba5d0db7a
+Security Groups	b3455868-8842-4b16-9f35-684e25f25f28, 1320ddfd-e090-4300-8d9c-c0d10dfaf84b, c741134d-43d3-4419-bb55-ba6e60bead75, 58269c3b-bd2d-4287-aedc-2e2f2c744c19
+Keypair	c30-drm-keypair
+Snapshot ID for volume	e355ab4b-a2f5-4a25-a0c8-2523816c9678 (large_mem snapshot)
+Flavor for low‑mem test	c2m4 (tagged with host_type=smallmem)
+Expected host aggregate	low-memory-hosts → contains tst-overcloud-compute-02
+
+✔️ So yes — all values are mapped consistently with your previous setup, except now we are using:
+
+Flavor: c2m4
+
+VM name: test-lowmem-vm
+
+Volume name: test-lowmem-vol
+
+Port name: test-lowmem-port
+
+These new names keep them separate from your high‑mem test.
+
+✅ Next step
+If you’re ready, start with:
+
+bash
+Copy
+Edit
+openstack port create \
+  --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+  --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+  --enable test-lowmem-port -f json | jq -r '.id'
+Paste the output here, and we’ll proceed step by step exactly like before.
+Let’s go when you’re ready! ✅
+
+
+
+
+
+
+
+
+
+
