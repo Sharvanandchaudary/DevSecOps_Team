@@ -983,3 +983,131 @@ vsaravan@sjcvl-ghrunner1:~$ openstack aggregate show low-memory-hosts
 | uuid              | d8a9e68c-287b-45dd-823c-9b0aaba9dcec           |
 +-------------------+------------------------------------------------+
 vsaravan@sjcvl-ghrunner1:~$
+
+
+
+
+
+
+
+✔️ Volume
+568a80a0-249f-40d8-93c0-649d58631f8e
+– Created from snapshot ✅
+– But its status showed reserved earlier because openstack server create failed.
+Once a server creation fails, that volume stays locked in a reserved state and cannot be reused.
+
+❌ You need to delete this volume and create a new one from the same snapshot.
+
+🚩 Reason the server creation failed
+We already identified the mismatch:
+
+Aggregate is tagged host_type=lowmem.
+
+Flavor c2m4 was tagged host_type=smallmem when you tried.
+
+We fixed that now with:
+
+bash
+Copy
+Edit
+openstack flavor set c2m4 --property aggregate_instance_extra_specs:host_type=lowmem
+(Check again with openstack flavor show c2m4 | grep properties to be sure.)
+
+✅ What you need to do now
+Since the port and floating IP are ready, you do not need to recreate them.
+You just need to:
+
+Step 1: Delete the old reserved volume
+bash
+Copy
+Edit
+openstack volume delete 568a80a0-249f-40d8-93c0-649d58631f8e
+Step 2: Create a fresh volume from the same snapshot
+bash
+Copy
+Edit
+volume_id=$(openstack volume create -f json \
+  --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+  --size 125 \
+  --bootable test-lowmem-vol | jq -r '.id')
+echo "Created volume: $volume_id"
+Verify status:
+
+bash
+Copy
+Edit
+openstack volume show $volume_id | grep status
+# Should show: status | available
+Step 3: Retry the server creation with the same port
+bash
+Copy
+Edit
+openstack server create \
+  --flavor c2m4 \
+  --volume $volume_id \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  --port c2ea5a2b-e536-4d5a-96a8-d01bfd43630c \
+  --key-name c30-drm-keypair \
+  --wait test-lowmem-vm
+Step 4: Verify placement
+bash
+Copy
+Edit
+openstack server show test-lowmem-vm -f value -c OS-EXT-SRV-ATTR:host
+✅ Expected: tst-overcloud-compute-02.openstack.cadence.com
+
+✅ Summary
+Reuse port and floating IP (no need to create new ones).
+
+Delete and recreate the volume.
+
+Run server create again after fixing flavor metadata.
+
+If you’ve already run:
+
+bash
+Copy
+Edit
+openstack flavor set c2m4 --property aggregate_instance_extra_specs:host_type=lowmem
+and confirmed it, then go ahead and delete the old volume, create a new one, and retry server create.
+
+Paste me:
+
+Output of openstack flavor show c2m4 | grep properties
+
+Output of openstack volume show <new_volume_id> | grep status
+before you retry, and I’ll confirm all is good before you launch! 🚀
+
+
+
+
+
+
+
+
+
+Ask ChatGPT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
