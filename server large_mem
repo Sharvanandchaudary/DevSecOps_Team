@@ -1096,6 +1096,12 @@ Ask ChatGPT
 
 
 
+vsaravan@sjcvl-ghrunner1:~$ openstack flavor show c2m4 | grep properties
+| properties                 | aggregate_instance_extra_specs:host_type='lowmem' |
+vsaravan@sjcvl-ghrunner1:~$ openstack volume delete 568a80a0-249f-40d8-93c0-649d58631f8e
+Failed to delete volume with name or ID '568a80a0-249f-40d8-93c0-649d58631f8e': Invalid volume: Volume status must be available or error or error_restoring or error_extending or error_managing and must not be migrating, attached, belong to a group, have snapshots or be disassociated from snapshots after volume transfer. (HTTP 400) (Request-ID: req-f99d1ff7-76a6-47bb-af53-e09b4c73eaf0)
+1 of 1 volumes failed to delete.
+
 
 
 
