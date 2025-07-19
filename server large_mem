@@ -1,0 +1,113 @@
+#!/bin/bash
+ 
+# Input parameter
+input_value=$1
+ 
+# Create a network port
+port_id=$(openstack port create --network ec40bccd-c7d2-4dcb-9cbd-2f0369b7dc8f --fixed-ip subnet=dc0bcb6d-c916-4b25-aaec-f5b76a6dd7ab --enable oa80_big_mem_test_${input_value} -f json | jq -r '.id')
+echo $port_id
+ 
+# Assign security groups to the port
+openstack port set --security-group 17888647-defd-4a65-9500-e4bb7a2e1304 --security-group e2231818-7d83-4f0e-b470-95453cdbd869  $port_id
+ 
+# Create a floating IP
+openstack floating ip create -f json --subnet 08912802-1f16-471f-b8d1-385b36d94651 --port $port_id pro-net-vlan3160
+ 
+# Create a volume
+volume_id=$(openstack volume create -f json --type netapp_iscsi --snapshot 36748f2c-3076-4844-ba8d-5c6d2df08b3d --size 320 --bootable oa80_big_mem_test-${input_value} | jq -r '.id')
+echo $volume_id
+ 
+# Create a server
+openstack server create --flavor m6.large-mem --volume $volume_id --security-group 17888647-defd-4a65-9500-e4bb7a2e1304 --security-group e2231818-7d83-4f0e-b470-95453cdbd869 --port $port_id --key-name c30-drm-keypair --wait oa80_big_mem_test-${input_value}
+ 
+#openstack server create --flavor m6i.xlarge_nexum --volume $volume_id --security-group 6a5eb622-2c9d-4c9b-800d-baa5fe24aae3 --security-group 2b22c332-7937-4c90-a413-fabc05f89ae2 --port $port_id --key-name c30-drm-keypair --wait oa80_big_mem_test-${input_value}
+ 
+# List the server
+openstack server list | grep -i "oa80_big_mem_test"
+
+This is a sample file to create a server inside openstack 
+
+
+for all thgese values now we need to find for tn02 in test env
+
+
+
+3eb39e89-ac62-4b5b-a313-8d52482cc1f2    - network
+
+3eb39e89-ac62-4b5b-a313-8d52482cc1f2    - network
+
+b3455868-8842-4b16-9f35-684e25f25f28
+1320ddfd-e090-4300-8d9c-c0d10dfaf84b
+	c741134d-43d3-4419-bb55-ba6e60bead75
+
+58269c3b-bd2d-4287-aedc-2e2f2c744c19
+
+
+e5db0db9-bf93-43f4-928a-e46e099fef9e -subnet
+
+e33be8b2-02e2-41a5-87b5-830ba5d0db7a  - flaoting ip
+pro-subnet-1162  - pronet vlan
+
+
+
+e5db0db9-bf93-43f4-928a-e46e099fef9e -subnet
+
+e33be8b2-02e2-41a5-87b5-830ba5d0db7a  - flaoting ip
+pro-subnet-1162  - pronet vlan
+
+
+We've set up two host aggregates to better align compute resources with workload memory requirements:
+high-memory-hosts: Includes tst-overcloud-compute-01, tagged with host_type=highmem
+low-memory-hosts: Includes tst-overcloud-compute-02, tagged with host_type=lowmem
+To ensure proper scheduling, we've tagged relevant flavors with matching metadata:
+m1.large → host_type=highmem
+ c2m4 → host_type=smallmem
+This configuration ensures that instances are scheduled on hosts with appropriate memory capacity
+ 
+To test:
+launch an instance with each flavor
+check which compute node it is hosted on
+openstack server show test-highmem-vm -f value -c OS-EXT-SRV-ATTR:host
+openstack server show test-lowmem-vm -f value -c OS-EXT-SRV-ATTR:host
+
+let me know if you have any questions
+ 
+
+we need to do thsi please map[ values and give ask if any thig require sokkk
+
+
+
+
+
+
+
+
+
+
+
+
+large_mem
+Overview
+Messages
+Name
+large_mem
+ID
+e355ab4b-a2f5-4a25-a0c8-2523816c9678
+Project ID
+59c2d928ef6046069a0175d74dc3dc23
+Status
+Available
+Volume
+c30-to-test-to-01-haproxy-volume
+Group Snapshot
+-
+Specs
+Size
+125 GiB
+Created
+July 19, 2025, 1:26 a.m.
+Metadata
+None
+
+
+so i found some values and i will gove input map those and give me the script as output i will run and see ok
