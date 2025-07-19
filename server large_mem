@@ -944,3 +944,42 @@ vsaravan@sjcvl-ghrunner1:~$
 vsaravan@sjcvl-ghrunner1:~$
 
 
+
+
+
+vsaravan@sjcvl-ghrunner1:~$
+vsaravan@sjcvl-ghrunner1:~$ ^C
+vsaravan@sjcvl-ghrunner1:~$ openstack flavor show c2m4
++----------------------------+-----------------------------------------------------+
+| Field                      | Value                                               |
++----------------------------+-----------------------------------------------------+
+| OS-FLV-DISABLED:disabled   | False                                               |
+| OS-FLV-EXT-DATA:ephemeral  | 0                                                   |
+| access_project_ids         | None                                                |
+| description                | None                                                |
+| disk                       | 70                                                  |
+| id                         | 319863b9-eb24-4f11-9c58-4a63de12f9cc                |
+| name                       | c2m4                                                |
+| os-flavor-access:is_public | True                                                |
+| properties                 | aggregate_instance_extra_specs:host_type='smallmem' |
+| ram                        | 4096                                                |
+| rxtx_factor                | 1.0                                                 |
+| swap                       | 0                                                   |
+| vcpus                      | 2                                                   |
++----------------------------+-----------------------------------------------------+
+vsaravan@sjcvl-ghrunner1:~$ openstack aggregate show low-memory-hosts
++-------------------+------------------------------------------------+
+| Field             | Value                                          |
++-------------------+------------------------------------------------+
+| availability_zone | None                                           |
+| created_at        | 2025-07-18T16:46:37.000000                     |
+| deleted_at        | None                                           |
+| hosts             | tst-overcloud-compute-02.openstack.cadence.com |
+| id                | 4                                              |
+| is_deleted        | False                                          |
+| name              | low-memory-hosts                               |
+| properties        | host_type='lowmem'                             |
+| updated_at        | None                                           |
+| uuid              | d8a9e68c-287b-45dd-823c-9b0aaba9dcec           |
++-------------------+------------------------------------------------+
+vsaravan@sjcvl-ghrunner1:~$
