@@ -532,6 +532,19 @@ vsaravan@sjcvl-ghrunner1:~$
 
 
 
+openstack server create \
+  --flavor m1.large \
+  --volume 20189745-bc77-41ee-ab7e-563a3a1b9895 \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  --port 39eeee6a-fdc3-42dd-9813-1895a8867f66 \
+  --key-name c30-drm-keypair \
+  --wait tn02_big_mem_test-01
+
+
+
 
 
 
