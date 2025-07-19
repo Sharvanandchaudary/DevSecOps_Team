@@ -330,3 +330,84 @@ openstack server create \
 echo "Server created successfully"
 
 openstack server show tn02_big_mem_test-${input_value} -f value -c OS-EXT-SRV-ATTR:host
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+vsaravan@sjcvl-ghrunner1:~$ +-------------------------------------^C
+vsaravan@sjcvl-ghrunner1:~$ port_id=$(openstack port create \
+>   --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+>   --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+>   --enable tn02_big_mem_test_${input_value} -f json | jq -r '.id')
+vsaravan@sjcvl-ghrunner1:~$ echo "Created port: $port_id"
+Created port: 39eeee6a-fdc3-42dd-9813-1895a8867f66
+vsaravan@sjcvl-ghrunner1:~$ openstack port set \
+>   --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+>   --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+>   --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+>   --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+>   $port_id
+
+vsaravan@sjcvl-ghrunner1:~$ echo "Security groups set on port"
+Security groups set on port
+vsaravan@sjcvl-ghrunner1:~$ openstack floating ip create -f json \
+>   --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+>   --port $port_id pro-net-vlan1162
+
+{
+  "created_at": "2025-07-19T06:33:03Z",
+  "description": "",
+  "dns_domain": "",
+  "dns_name": "",
+  "fixed_ip_address": "10.154.172.186",
+  "floating_ip_address": "10.107.162.79",
+  "floating_network_id": "8ea2d087-bf85-4835-a4e5-54fd51824ce3",
+  "id": "91a7f0bb-8158-46da-9573-3dad7cfbe71f",
+  "name": "10.107.162.79",
+  "port_details": {
+    "name": "tn02_big_mem_test_",
+    "network_id": "3eb39e89-ac62-4b5b-a313-8d52482cc1f2",
+    "mac_address": "fa:16:3e:a6:e6:c1",
+    "admin_state_up": true,
+    "status": "DOWN",
+    "device_id": "",
+    "device_owner": ""
+  },
+  "port_forwardings": [],
+  "port_id": "39eeee6a-fdc3-42dd-9813-1895a8867f66",
+  "project_id": "59c2d928ef6046069a0175d74dc3dc23",
+  "qos_policy_id": null,
+  "revision_number": 0,
+  "router_id": "a6615d27-2a9d-45ba-a3c8-9b452c154b13",
+  "status": "DOWN",
+  "subnet_id": "e33be8b2-02e2-41a5-87b5-830ba5d0db7a",
+  "tags": [],
+  "updated_at": "2025-07-19T06:33:03Z"
+}
+vsaravan@sjcvl-ghrunner1:~$ echo "Floating IP created and associated"
+Floating IP created and associated
+vsaravan@sjcvl-ghrunner1:~$
+vsaravan@sjcvl-ghrunner1:~$ volume_id=$(openstack volume create -f json \
+>   --type netapp_iscsi \
+>   --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+>   --size 125 \
+>   --bootable tn02_big_mem_test-${input_value} | jq -r '.id')
+
+Invalid input received: Invalid volume_type provided: 90efbc1b-7dd3-4bef-8da6-c232e5b6956a (requested type is not compatible; recommend omitting the type argument). (HTTP 400) (Request-ID: req-9c357196-1a3d-4370-86ef-9a9a758e38fc)
+vsaravan@sjcvl-ghrunner1:~$ echo "Created volume: $volume_id"
+Created volume:
+vsaravan@s
