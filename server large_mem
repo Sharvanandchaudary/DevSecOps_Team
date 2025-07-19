@@ -111,3 +111,101 @@ None
 
 
 so i found some values and i will gove input map those and give me the script as output i will run and see ok
+
+
+
+
+
+
+✅ 1. Check Network ID and Subnet ID
+Verify the network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 and subnet e5db0db9-bf93-43f4-928a-e46e099fef9e belong to tn02 test env:
+
+bash
+Copy
+Edit
+openstack network show 3eb39e89-ac62-4b5b-a313-8d52482cc1f2
+Look for the subnets field and confirm it includes e5db0db9-bf93-43f4-928a-e46e099fef9e.
+
+bash
+Copy
+Edit
+openstack subnet show e5db0db9-bf93-43f4-928a-e46e099fef9e
+Check its network_id matches 3eb39e89-ac62-4b5b-a313-8d52482cc1f2.
+
+✅ 2. Check Security Groups
+Run for each SG ID you plan to use:
+
+bash
+Copy
+Edit
+openstack security group show b3455868-8842-4b16-9f35-684e25f25f28
+openstack security group show 1320ddfd-e090-4300-8d9c-c0d10dfaf84b
+openstack security group show c741134d-43d3-4419-bb55-ba6e60bead75
+openstack security group show 58269c3b-bd2d-4287-aedc-2e2f2c744c19
+Verify they exist in the test environment project and contain the rules you expect.
+
+✅ 3. Check Keypair
+bash
+Copy
+Edit
+openstack keypair show c30-drm-keypair
+Confirm the keypair exists and belongs to your project.
+
+✅ 4. Check Floating IP Network
+bash
+Copy
+Edit
+openstack network show pro-subnet-1162
+(or if it’s pro-net-vlan3160, show that instead):
+
+bash
+Copy
+Edit
+openstack network list | grep pro
+Confirm which is the correct external network for floating IP allocation.
+
+✅ 5. Check Snapshot / Volume Source
+bash
+Copy
+Edit
+openstack volume show e355ab4b-a2f5-4a25-a0c8-2523816c9678
+Confirm it’s in available state and has bootable: true or comes from the right source.
+
+✅ 6. Check Flavor Extra Specs
+bash
+Copy
+Edit
+openstack flavor show m1.large
+Scroll down to properties or extra_specs. Make sure you see:
+
+ini
+Copy
+Edit
+host_type = highmem
+✅ 7. Check Aggregate Metadata and Membership
+bash
+Copy
+Edit
+openstack aggregate show high-memory-hosts
+Look for:
+
+hosts list → confirm it includes tst-overcloud-compute-02 (tn02)
+
+properties → confirm host_type = highmem
+
+✅ 8. (Optional) Dry Run With No Server Creation
+You can test creating just the port and volume first:
+
+bash
+Copy
+Edit
+openstack port create --network <network-id> --fixed-ip subnet=<subnet-id> test-port-dryrun
+openstack volume create --size 1 test-volume-dryrun
+Then delete them after verification:
+
+bash
+Copy
+Edit
+openstack port delete test-port-dryrun
+openstack volume delete test-volume-dryrun
+
