@@ -420,5 +420,37 @@ vsaravan@s
 volume_id=$(openstack volume create -f json \
   --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
   --size 125 \
-  --bootable tn02_big_mem_test-<your_suffix> | jq -r '.id')
+  --bootable tn02_big_mem_test-01 | jq -r '.id')
 echo "Created volume: $volume_id"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Invalid input received: Invalid volume_type provided: 90efbc1b-7dd3-4bef-8da6-c232e5b6956a (requested type is not compatible; recommend omitting the type argument). (HTTP 400) (Request-ID: req-9c357196-1a3d-4370-86ef-9a9a758e38fc)
+vsaravan@sjcvl-ghrunner1:~$ echo "Created volume: $volume_id"
+Created volume:
+vsaravan@sjcvl-ghrunner1:~$ ^C
+vsaravan@sjcvl-ghrunner1:~$
+vsaravan@sjcvl-ghrunner1:~$ volume_id=$(openstack volume create -f json \
+>   --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+>   --size 125 \
+>   --bootable tn02_big_mem_test-01 | jq -r '.id')
+
+vsaravan@sjcvl-ghrunner1:~$ echo "Created volume: $volume_id"
+Created volume: 20189745-bc77-41ee-ab7e-563a3a1b9895
+vsaravan@sjcvl-ghrunner1:~$
+vsaravan@sjcvl-ghrunner1:~$
+
