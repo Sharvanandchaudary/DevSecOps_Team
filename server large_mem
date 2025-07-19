@@ -271,3 +271,62 @@ saravan@sjcvl-ghrunner1:~$ openstack volume snapshot show e355ab4b-a2f5-4a25-a0c
 | updated_at                                 | 2025-07-19T05:26:33.000000           |
 | volume_id                                  | 60b80fac-0dd2-4c4e-a0dd-f161c7bb1b4a |
 +-------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#!/bin/bash
+
+input_value=$1
+
+port_id=$(openstack port create \
+  --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+  --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+  --enable tn02_big_mem_test_${input_value} -f json | jq -r '.id')
+echo "Created port: $port_id"
+
+openstack port set \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  $port_id
+echo "Security groups set on port"
+
+openstack floating ip create -f json \
+  --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+  --port $port_id pro-net-vlan1162
+echo "Floating IP created and associated"
+
+volume_id=$(openstack volume create -f json \
+  --type netapp_iscsi \
+  --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+  --size 125 \
+  --bootable tn02_big_mem_test-${input_value} | jq -r '.id')
+echo "Created volume: $volume_id"
+
+openstack server create \
+  --flavor m1.large \
+  --volume $volume_id \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  --port $port_id \
+  --key-name c30-drm-keypair \
+  --wait tn02_big_mem_test-${input_value}
+echo "Server created successfully"
+
+openstack server show tn02_big_mem_test-${input_value} -f value -c OS-EXT-SRV-ATTR:host
