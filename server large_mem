@@ -1215,6 +1215,72 @@ saravan@sjcvl-ghrunner1:~$ openstack server create \
 vsaravan@sjcvl-ghrunner1:~$
 
 
+✅ 1. Check the high‑memory VM (m1.large)
+bash
+Copy
+Edit
+openstack server show tn02_big_mem_test-01 -f value -c OS-EXT-SRV-ATTR:host
+✅ Expected output:
+tst-overcloud-compute-01.openstack.cadence.com
+
+✅ 2. Check the low‑memory VM (c2m4)
+bash
+Copy
+Edit
+openstack server show test-lowmem-vm -f value -c OS-EXT-SRV-ATTR:host
+✅ Expected output:
+tst-overcloud-compute-02.openstack.cadence.com
+
+✅ 3. (Optional) Cross‑check aggregate memberships
+If you want to prove that those hosts are indeed in the correct aggregates:
+
+High‑memory aggregate:
+
+bash
+Copy
+Edit
+openstack aggregate show high-memory-hosts | grep hosts
+Should include:
+
+Copy
+Edit
+tst-overcloud-compute-01.openstack.cadence.com
+Low‑memory aggregate:
+
+bash
+Copy
+Edit
+openstack aggregate show low-memory-hosts | grep hosts
+Should include:
+
+Copy
+Edit
+tst-overcloud-compute-02.openstack.cadence.com
+✅ 4. (Optional) Double‑check flavor properties
+m1.large:
+
+bash
+Copy
+Edit
+openstack flavor show m1.large | grep properties
+Should show:
+
+vbnet
+Copy
+Edit
+aggregate_instance_extra_specs:host_type='highmem'
+c2m4:
+
+bash
+Copy
+Edit
+openstack flavor show c2m4 | grep properties
+Should show:
+
+vbnet
+Copy
+Edit
+aggregate_instance_extra_specs:host_type='lowmem'
 
 
 
