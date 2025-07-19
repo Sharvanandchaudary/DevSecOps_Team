@@ -616,3 +616,61 @@ vsaravan@sjcvl-ghrunner1:~$ openstack aggregate show high-memory-hosts
 +-------------------+------------
 
 
+
+
+
+
+
+
+saravan@sjcvl-ghrunner1:~$ openstack server create \
+>   --flavor m1.large \
+>   --volume 20189745-bc77-41ee-ab7e-563a3a1b9895 \
+>   --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+>   --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+>   --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+>   --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+>   --port 39eeee6a-fdc3-42dd-9813-1895a8867f66 \
+>   --key-name c30-drm-keypair \
+>   --wait tn02_big_mem_test-01
+
++--------------------------------------+--------------------------------------------------+
+| Field                                | Value                                            |
++--------------------------------------+--------------------------------------------------+
+| OS-DCF:diskConfig                    | MANUAL                                           |
+| OS-EXT-AZ:availability_zone          | nova                                             |
+| OS-EXT-SRV-ATTR:host                 | tst-overcloud-compute-01.openstack.cadence.com   |
+| OS-EXT-SRV-ATTR:hypervisor_hostname  | tst-overcloud-compute-01.openstack.cadence.com   |
+| OS-EXT-SRV-ATTR:instance_name        | instance-00000ee9                                |
+| OS-EXT-STS:power_state               | Running                                          |
+| OS-EXT-STS:task_state                | None                                             |
+| OS-EXT-STS:vm_state                  | active                                           |
+| OS-SRV-USG:launched_at               | 2025-07-19T06:45:51.000000                       |
+| OS-SRV-USG:terminated_at             | None                                             |
+| accessIPv4                           |                                                  |
+| accessIPv6                           |                                                  |
+| addresses                            | c30-tn-test-tn-02-network=10.107.162.79,         |
+|                                      | 10.154.172.186                                   |
+| adminPass                            | XsQeU9eZcFbP                                     |
+| config_drive                         |                                                  |
+| created                              | 2025-07-19T06:45:39Z                             |
+| flavor                               | m1.large (d730eb29-69d2-41c7-b412-9c8d909b9aab)  |
+| hostId                               | e33a25b6c552fecbb1171d2294c17e26e329889ee3ffbfeb |
+|                                      | 163cad55                                         |
+| id                                   | 3aabe94a-a7c5-4d72-b348-aa17ebffbf3b             |
+| image                                | N/A (booted from volume)                         |
+| key_name                             | c30-drm-keypair                                  |
+| name                                 | tn02_big_mem_test-01                             |
+| os-extended-volumes:volumes_attached | [{'id': '20189745-bc77-41ee-ab7e-563a3a1b9895'}] |
+| progress                             | 0                                                |
+| project_id                           | 59c2d928ef6046069a0175d74dc3dc23                 |
+| properties                           |                                                  |
+| security_groups                      | name='c30-tn-test-tn-02-Chm-AccessFromUtlSvr-sg' |
+|                                      | name='default'                                   |
+|                                      | name='c30-tn-test-tn-02-PrivateSG-sg'            |
+|                                      | name='c30-tn-test-tn-02-CLA-SG-sg'               |
+|                                      | name='c30-tn-test-tn-02-Platform-SG-sg'          |
+| status                               | ACTIVE                                           |
+| updated                              | 2025-07-19T06:45:51Z                             |
+| user_id                              | 64a837e9a22b4edf90375c7182a9f297                 |
++--------------------------------------+-----------------------------------------
+
