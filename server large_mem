@@ -1161,6 +1161,58 @@ Once you decide, run the commands above and share the outputs — I’ll stay wi
 Ask ChatGPT
 
 
+saravan@sjcvl-ghrunner1:~$ openstack server create \
+>   --flavor c2m4 \
+>   --volume $volume_id \
+>   --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+>   --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+>   --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+>   --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+>   --port c2ea5a2b-e536-4d5a-96a8-d01bfd43630c \
+>   --key-name c30-drm-keypair \
+>   --wait test-lowmem-vm
+
++--------------------------------------+--------------------------------------------------+
+| Field                                | Value                                            |
++--------------------------------------+--------------------------------------------------+
+| OS-DCF:diskConfig                    | MANUAL                                           |
+| OS-EXT-AZ:availability_zone          | nova                                             |
+| OS-EXT-SRV-ATTR:host                 | tst-overcloud-compute-02.openstack.cadence.com   |
+| OS-EXT-SRV-ATTR:hypervisor_hostname  | tst-overcloud-compute-02.openstack.cadence.com   |
+| OS-EXT-SRV-ATTR:instance_name        | instance-00000eec                                |
+| OS-EXT-STS:power_state               | Running                                          |
+| OS-EXT-STS:task_state                | None                                             |
+| OS-EXT-STS:vm_state                  | active                                           |
+| OS-SRV-USG:launched_at               | 2025-07-19T08:02:21.000000                       |
+| OS-SRV-USG:terminated_at             | None                                             |
+| accessIPv4                           |                                                  |
+| accessIPv6                           |                                                  |
+| addresses                            | c30-tn-test-tn-02-network=10.107.163.51,         |
+|                                      | 10.154.172.240                                   |
+| adminPass                            | w238u3rDGhb3                                     |
+| config_drive                         |                                                  |
+| created                              | 2025-07-19T08:02:05Z                             |
+| flavor                               | c2m4 (319863b9-eb24-4f11-9c58-4a63de12f9cc)      |
+| hostId                               | 0e1b3c97d802f0c582b164229a672f801ce7ca12ffa004ec |
+|                                      | 15fad5e3                                         |
+| id                                   | 7655a03d-3472-4e1e-a600-979af39d07d1             |
+| image                                | N/A (booted from volume)                         |
+| key_name                             | c30-drm-keypair                                  |
+| name                                 | test-lowmem-vm                                   |
+| os-extended-volumes:volumes_attached | [{'id': '7b41eeb5-a154-4da4-a54d-92f67919a4e9'}] |
+| progress                             | 0                                                |
+| project_id                           | 59c2d928ef6046069a0175d74dc3dc23                 |
+| properties                           |                                                  |
+| security_groups                      | name='c30-tn-test-tn-02-Chm-AccessFromUtlSvr-sg' |
+|                                      | name='default'                                   |
+|                                      | name='c30-tn-test-tn-02-PrivateSG-sg'            |
+|                                      | name='c30-tn-test-tn-02-CLA-SG-sg'               |
+|                                      | name='c30-tn-test-tn-02-Platform-SG-sg'          |
+| status                               | ACTIVE                                           |
+| updated                              | 2025-07-19T08:02:21Z                             |
+| user_id                              | 64a837e9a22b4edf90375c7182a9f297                 |
++--------------------------------------+--------------------------------------------------+
+vsaravan@sjcvl-ghrunner1:~$
 
 
 
