@@ -1,0 +1,77 @@
+📅 7/20 – 8/1 FULL‑DAY SCHEDULE (Morning to Evening)
+Daily Time Table:
+
+Time	Focus	Details
+7:30 AM – 9:00 AM	Core Topic Study	Read/learn the day’s AI/ML topic (books, course, notes).
+9:00 AM – 10:30 AM	Hands‑On Session #1	Code a basic implementation of that topic.
+10:30 AM – 11:00 AM	Break	
+11:00 AM – 12:30 PM	AWS ML Specialty	Study one AWS service (S3, SageMaker, Glue, etc.), do 10–15 exam questions.
+12:30 PM – 1:30 PM	Lunch/Rest	
+1:30 PM – 3:00 PM	Interview Theory Qs	Practice common Qs (conceptual + coding). Write answers in a notebook.
+3:00 PM – 4:30 PM	Hands‑On Session #2	Extend your morning implementation or integrate with AWS.
+4:30 PM – 5:30 PM	Review & Summarize	Create a one‑page summary/blog post of what you learned.
+5:30 PM – 6:00 PM	Break/Dinner	
+6:00 PM – 10:00 PM	Evening Deep Work	Real‑time project, advanced tasks, mock interviews, applications.
+
+📌 Day‑by‑Day Topics
+Day	Date	Focus Area	Hands‑On Task	AWS Service	Interview Practice
+Day 1	Sun 7/20	Python, Pandas, NumPy	Preprocess Titanic dataset	S3 basics	Feature scaling, encoding Qs
+Day 2	Mon 7/21	EDA & Visualization	Correlation plots, outlier detection	Athena querying	Why EDA? Outlier handling
+Day 3	Tue 7/22	Linear & Logistic Regression	Build & evaluate models	SageMaker Notebook	Bias-variance, ROC curve
+Day 4	Wed 7/23	Tree Models (RF, XGBoost)	Tune RandomForest, XGBoost	Autopilot	Bagging vs Boosting
+Day 5	Thu 7/24	Unsupervised Learning	K‑Means clustering	S3 integration	PCA vs K‑Means
+Day 6	Fri 7/25	Deep Learning Basics	Simple ANN in Keras	SageMaker Training Jobs	Backpropagation
+Day 7	Sat 7/26	CNNs & RNNs	Train MNIST CNN	JumpStart Models	CNN vs RNN, vanishing gradient
+Day 8	Sun 7/27	MLOps & Pipelines	Build GitHub Actions ML CI/CD	SageMaker Pipelines	Model monitoring, drift
+Day 9	Mon 7/28	End‑to‑End Pipeline	Combine preprocessing, training, deployment	Lambda trigger + SageMaker	A/B testing, retraining
+Day 10	Tue 7/29	Final Mock Day	Review all projects & notes	Take AWS practice test	Mock interview
+
+Buffer/Polish:
+
+Day	Date	Focus	Notes
+Day 11	Wed 7/30	Revise Weak Areas	Polish GitHub repo, final resume touches
+Day 12	Thu 7/31	Full Mock Interview	Run through all Qs and project explanations
+Day 13	Fri 8/1	Final Revision	AWS ML Specialty exam simulation & mock
+
+Evening of 8/1 (6 PM onward):
+
+6:00 PM – 7:30 PM: Quick revision flashcards.
+
+7:30 PM – 8:00 PM: AWS ML mock questions.
+
+8:00 PM – 9:00 PM: Mock interview / explain your project out loud.
+
+9:00 PM – 9:50 PM: Apply to 2–3 jobs.
+
+9:50 PM – 10:00 PM: Write readiness checklist.
+
+🌙 From 8/2 Onwards (Evenings Only 6 PM – 10 PM)
+Time	Focus	Details
+6:00 PM – 6:30 PM	Weak Area Revision	Pick topics you felt unsure about, review notes.
+6:30 PM – 7:30 PM	Advanced Project Work	Build/improve a portfolio project or contribute to open source.
+7:30 PM – 8:00 PM	AWS ML Specialty Practice	Do 10–20 questions daily until confident.
+8:00 PM – 9:00 PM	Interview Simulation	Practice behavioral + technical Qs, record yourself.
+9:00 PM – 9:30 PM	Job Applications	Apply to 2–3 new roles, tailor resume.
+9:30 PM – 10:00 PM	Reflect & Plan	Log progress, list next day’s tasks.
+
+🎯 Ongoing Goals
+Apply to 50 jobs across LinkedIn and Jobright.ai by Aug 15.
+
+Keep pushing all code/projects to GitHub.
+
+Keep a Google Sheet tracker (Date | Topic | Task Done | Qs Practiced | Jobs Applied).
+
+If you’d like, I can:
+✅ generate a daily checklist template,
+✅ give you curated AWS ML Specialty resources, or
+✅ provide interview Q&A PDFs.
+
+Just ask and I’ll prepare them! 💪
+
+
+
+
+
+
+
+Ask ChatGPT
