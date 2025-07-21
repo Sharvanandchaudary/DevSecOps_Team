@@ -10,6 +10,65 @@ fi
 
 
 
+jobs:
+  pre_chamber_deployment:
+    runs-on: cloud30-docker-mvp
+    steps:
+      - name: Setup Git Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/setup-git-credentials
+        with:
+          credentials: ${{ secrets.GIT_CREDENTIALS }}
+
+      - name: Checkout cadence-cloud-OpenStack repo
+        uses: actions/checkout@v3
+        with:
+          repository: IT/terraform-cadencecld-openstack
+          path: ./terraform-cadencecld-openstack
+          token: ${{ secrets.REPO_TOKEN }}
+          fetch-depth: 0
+          ref: main
+
+      # ⬇️ 1. Download previous SHA artifact (optional, only if you uploaded before)
+      - name: Download previous SHA artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: os_sha_file
+          path: ./terraform-cadencecld-openstack
+        continue-on-error: true
+
+      # ⬇️ 2. Capture or reuse SHA
+      - name: Capture or reuse OS SHA
+        id: capture_os_sha
+        run: |
+          cd terraform-cadencecld-openstack
+          if [ -f "./os_sha.txt" ]; then
+            old_sha=$(cat ./os_sha.txt)
+            echo "Reusing existing SHA: $old_sha"
+            echo "sha=$old_sha" >> $GITHUB_OUTPUT
+          else
+            current_sha=$(git rev-parse HEAD)
+            echo "Captured new SHA: $current_sha"
+            echo "sha=$current_sha" >> $GITHUB_OUTPUT
+            echo "$current_sha" > os_sha.txt
+          fi
+
+      # ⬇️ (later steps can now use steps.capture_os_sha.outputs.sha)
+      - name: Generate changed files pinned to captured SHA
+        id: generate_cc_changed_files
+        run: |
+          cd terraform-cadencecld-openstack
+          git fetch origin
+          git diff --name-only ${{ steps.capture_os_sha.outputs.sha }} > changed_files.txt
+          # etc…
+
+
+- name: Save SHA artifact
+  uses: actions/upload-artifact@v3
+  with:
+    name: os_sha_file
+    path: ./terraform-cadencecld-openstack/os_sha.txt
+
+
 
 - name: Check existing OS SHA
   id: check_existing_sha
