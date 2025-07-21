@@ -1594,3 +1594,23 @@ echo "os_chamber=$os_chamber" >> test_output.txt
             else
             echo "Match successful: Both AWS and OpenStack indicate chamber '$aws_cc_chamber'"
             fi
+
+
+
+
+Workflow has been updated with the following enhancements and validations:
+
+Commit SHA capture and isolation:
+Implemented logic to capture the exact commit SHA after checkout and pass it through the workflow, ensuring only the intended commit is used for deployments.
+
+Chamber value validation:
+Added validation steps to cross verify chamber IDs and environment variables against expected values. The workflow now exits early if incorrect or stale chamber values are detected, preventing unintended deployments.
+
+Concurrency control:
+Configured a unique concurrency group based on commit SHA and chamber ID so that parallel deployments remain fully isolated from one another. This prevents overlapping runs from interfering or overwriting each other.
+
+Integration with OpenStack jobs:
+Updated workflow logic to pass the validated commit SHA and chamber context directly into the OpenStack job steps, ensuring downstream tasks use the correct values.
+
+Parallel deployment testing:
+Performed repeated parallel deployment triggers at short intervals. Confirmed through logs and output artifacts that each run operates in its own isolated environment, validates chamber values correctly, and exits gracefully when mismatches are detected.
