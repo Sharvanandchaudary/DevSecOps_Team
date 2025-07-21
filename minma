@@ -3,6 +3,37 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
+- name: Check existing OS SHA
+  id: check_existing_sha
+  run: |
+    if [ -f "./terraform-cadencecld-openstack/os_sha.txt" ]; then
+      existing_sha=$(cat ./terraform-cadencecld-openstack/os_sha.txt)
+      echo "Found existing SHA: $existing_sha"
+      echo "sha=$existing_sha" >> $GITHUB_OUTPUT
+    else
+      echo "sha=" >> $GITHUB_OUTPUT
+    fi
+
+
+- name: Capture or reuse OS SHA
+  id: capture_os_sha
+  run: |
+    if [ -n "${{ steps.check_existing_sha.outputs.sha }}" ]; then
+      echo "Reusing existing SHA: ${{ steps.check_existing_sha.outputs.sha }}"
+      echo "sha=${{ steps.check_existing_sha.outputs.sha }}" >> $GITHUB_OUTPUT
+    else
+      cd terraform-cadencecld-openstack
+      current_sha=$(git rev-parse HEAD)
+      echo "No previous SHA found. Capturing new SHA: $current_sha"
+      echo "sha=$current_sha" >> $GITHUB_OUTPUT
+      # Save it for reuse in reruns
+      echo "$current_sha" > os_sha.txt
+    fi
+
+
+
+
+
 
 jobs:
   pre_chamber_deployment:
