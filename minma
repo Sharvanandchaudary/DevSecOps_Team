@@ -3,6 +3,14 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
+if [ -z "$aws_cc_chamber" ] || [ -z "$os_chamber" ]; then
+    echo "ERROR: One or both chamber values are missing!"
+    exit 1
+fi
+
+
+
+
 - name: Check existing OS SHA
   id: check_existing_sha
   run: |
