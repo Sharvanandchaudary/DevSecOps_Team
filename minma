@@ -11,6 +11,71 @@ cc-rhel86-baremtal-v2.3.1 - 2e8183f4-4672-4461-a527-a017a4477153
 
 
 
+
+
+
+
+✅ 1. Create a port
+bash
+Copy
+Edit
+port_id=$(openstack port create \
+  --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+  --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+  --enable test-highmem-image-port -f json | jq -r '.id')
+echo "Created port: $port_id"
+✅ 2. Assign security groups to the port
+bash
+Copy
+Edit
+openstack port set \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  $port_id
+echo "Security groups set on port"
+✅ 3. Create and associate a floating IP
+bash
+Copy
+Edit
+openstack floating ip create -f json \
+  --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+  --port $port_id pro-net-vlan1162
+echo "Floating IP created and associated"
+✅ 4. Launch the server using image and m1.large flavor
+Since you are booting directly from an image, you don’t need to create a volume first.
+
+bash
+Copy
+Edit
+openstack server create \
+  --flavor m1.large \
+  --image 2e8183f4-4672-4461-a527-a017a4477153 \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  --port $port_id \
+  --key-name c30-drm-keypair \
+  --wait test-highmem-image-vm
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 if [ -z "$aws_cc_chamber" ] || [ -z "$os_chamber" ]; then
     echo "ERROR: One or both chamber values are missing!"
     exit 1
