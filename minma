@@ -3,6 +3,13 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41-sensitive.tfvars.js
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
+
+
+
+cc-rhel86-baremtal-v2.3.1 - 2e8183f4-4672-4461-a527-a017a4477153
+
+
+
 if [ -z "$aws_cc_chamber" ] || [ -z "$os_chamber" ]; then
     echo "ERROR: One or both chamber values are missing!"
     exit 1
