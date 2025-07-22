@@ -1,0 +1,409 @@
+name: Golden AMI Built pipeline
+
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - '**/01-RHEL88-DRM/**'
+      - '**/docker-runner-build/**'
+      - '**/workflows/Golden-AMI-RHEL88-DRM-Pipeline-Packer-Build.yml'
+      - '**/workflows/Golden-AMI-Pipeline-Convert-VMDK-AMI.yml'
+      - '**/workflows/promote-to-test.yml'
+      - '**/workflows/promote-to-stage.yml'
+      - '**/workflows/promote-to-prod.yml'
+      - '**/workflows/promote-to-drm-test.yml'
+      - '**/workflows/promote-to-drm-prod.yml'
+      - '**/workflows/github-runner-docker-build.yml'
+      - '**/images/**'
+  workflow_dispatch:
+
+env:
+  OS_AUTH_URL: ${{ secrets.OS_AUTH_URL }}
+  OS_USERNAME: ${{ secrets.OS_USERNAME }}
+  OS_PASSWORD: ${{ secrets.OS_PASSWORD }}
+  OS_PROJECT_ID: ${{ secrets.OS_PROJECT_ID }}
+  OS_PROJECT_NAME: ${{ secrets.OS_PROJECT_NAME }}
+  OS_USER_DOMAIN_NAME: ${{ secrets.OS_USER_DOMAIN_NAME }}
+  OS_REGION_NAME: ${{ secrets.OS_REGION_NAME }}
+  cadence_os_user: ${{ secrets.CADENCE_OS_USER }}
+  cadence_os_user_password: ${{ secrets.CADENCE_OS_USER_PASSWORD }}
+  cadence_os_os_user_password: ${{ secrets.CADENCE_OS_OS_USER_PASSWORD }}
+  AWS_BUILD: ${{ secrets.AWS_BUILD }}
+
+jobs:
+  
+  golden_aws_ami_build_pipeline:
+    name: golden_aws_ami_build_pipeline
+    runs-on: [ cadence-cloud ]
+    outputs:
+      aws_ami_id: ${{ steps.build_aws.outputs.aws_ami_id }}
+    env:
+      cadence_os_user: ${{ secrets.CADENCE_OS_USER }}
+      cadence_os_user_password: ${{ secrets.CADENCE_OS_USER_PASSWORD }}
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v3
+
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Build AWS AMI with Packer
+        id: build_aws
+        if: ${{ env.AWS_BUILD == 'true' }}
+        run: |
+          export AWS_MAX_ATTEMPTS=120
+          export AWS_POLL_DELAY_SECONDS=60
+          echo "export cadence_os_user_password=${{ secrets.CADENCE_OS_USER_PASSWORD }}" >> $GITHUB_ENV
+          cd  ${{ github.workspace }}/packer/aws/
+          packer init ${{ github.workspace }}/packer/aws/
+          packer build ${{ github.workspace }}/packer/aws/ | tee packer_aws_output.log
+          AMI_ID=$(grep -A 1 "AMIs were created" packer_aws_output.log | grep -oP 'ami-\K[^,]*')
+          echo "AMI_ID=ami-${AMI_ID}" >> $GITHUB_ENV
+          echo "::set-output name=aws_ami_id::ami-${AMI_ID}"
+
+  golden_openstack_image_build_pipeline:
+    name: golden_openstack_image_build_pipeline
+    runs-on: [ cadence-cloud ]
+    outputs:
+      openstack_image_id: ${{ steps.build_openstack.outputs.openstack_image_id }}
+      openstack_image_prefix: ${{ steps.build_openstack.outputs.openstack_image_prefix }}
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v3
+      
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+      
+      - name: Configure AWS Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+  
+      - name: Build OpenStack Image with Packer
+        id: build_openstack
+        run: |
+          cd  ${{ github.workspace }}/packer/openstack/
+          packer init ${{ github.workspace }}/packer/openstack/
+          packer build ${{ github.workspace }}/packer/openstack/
+          IMAGE_ID=$(jq -r '.builds[-1].artifact_id' manifest.json)
+          echo "IMAGE_ID=${IMAGE_ID}" >> $GITHUB_ENV
+          echo "::set-output name=openstack_image_id::${IMAGE_ID}"
+          IMAGE_PREFIX=$(jq -r '.builds[-1].custom_data.image_prefix' manifest.json)
+          echo "IMAGE_PREFIX=${IMAGE_PREFIX}" >> $GITHUB_ENV
+          echo "::set-output name=openstack_image_prefix::${IMAGE_PREFIX}"
+
+      - name: OpenStack instance setup
+        id: os_configure
+        run: |
+          echo "export TF_VAR_os_url=${{ secrets.OS_AUTH_URL }}" >> $GITHUB_ENV          
+          echo "export TF_VAR_os_ur_passwd=${{ secrets.OS_PASSWORD }}" >> $GITHUB_ENV
+          echo "export TF_VAR_os_ur_name=${{ secrets.OS_USERNAME }}" >> $GITHUB_ENV
+          echo "export TF_VAR_os_project_name=${{ secrets.OS_PROJECT_NAME }}" >> $GITHUB_ENV
+          echo "export TF_VAR_os_region=${{ secrets.OS_REGION_NAME }}" >> $GITHUB_ENV
+          echo "export cadence_os_user=${{ secrets.CADENCE_OS_USER }}" >> $GITHUB_ENV
+          echo "export cadence_os_os_user_password=${{ secrets.CADENCE_OS_OS_USER_PASSWORD }}" >> $GITHUB_ENV
+
+  golden_openstack_image_next_version:
+    name: Next Release
+    runs-on: [ cadence-cloud ]
+    needs: [ golden_openstack_image_build_pipeline , golden_aws_ami_build_pipeline]
+    if: ${{ success() }}
+    outputs:
+      nextrelease: ${{ steps.semver.outputs.next }}
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get Previous tag
+        id: previoustag
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/github-action-get-previous-tag
+        with:
+          fallback: 0.0.1
+          workingDirectory: ${{ github.workspace }}
+
+      - name: Get Next Version
+        id: semver
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/semver-action
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
+          branch: ${{ github.ref_name }}
+          fromTag: ${{ steps.previoustag.outputs.tag }}
+
+      - name: Print versions
+        env:
+          SEM_VER: ${{ steps.semver.outputs.next }}
+          IMAGE_ID: ${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id }}
+          IMAGE_PREFIX:  ${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_prefix }}
+        run: |
+          echo "value = $SEM_VER"
+          echo "nextrelease=$SEM_VER" >> $GITHUB_OUTPUT
+          echo "value1 = $IMAGE_ID"
+          echo "value2 = $IMAGE_PREFIX"
+
+  run_validation_tests:
+    name: Run Validation Tests
+    runs-on: [ cadence-cloud ]
+    needs: [ golden_openstack_image_next_version,
+             golden_openstack_image_build_pipeline,
+             golden_aws_ami_build_pipeline ]
+    if: ${{ success() }}
+    outputs:
+      approved: ${{ steps.approval_result.outputs.approved }}
+      instance_id: ${{ steps.aws_ec2_launch.outputs.instance_id }}
+      ops_instance_id: ${{ steps.ops_vm_launch.outputs.ops_instance_id }}
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v3
+
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: OpenStack instance - Initialize Terraform
+        run: terraform init -var os_image_id=${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id }}
+        working-directory: ${{ github.workspace }}/packer/terraform/openstack/
+
+      - name: OpenStack instance - Plan Terraform
+        run: terraform plan -var os_image_id=${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id  }}
+        working-directory: ${{ github.workspace }}/packer/terraform/openstack/
+
+      - name: OpenStack instance - Apply Terraform configuration
+        id: ops_vm_launch
+        run: |
+          terraform apply -var os_image_id=${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id }} -auto-approve
+          instance_id=$(terraform output -raw instance_id)
+          echo $instance_id
+          echo "::set-output name=ops_instance_id::${instance_id}"
+        working-directory: ${{ github.workspace }}/packer/terraform/openstack/
+
+      - name: AWS instance - Initialize Terraform
+        if: ${{ env.AWS_BUILD == 'true' }}
+        run: terraform init -var aws_ami=${{ needs.golden_aws_ami_build_pipeline.outputs.aws_ami_id }}
+        working-directory: ${{ github.workspace }}/packer/terraform/aws/
+
+      - name: AWS instance - Plan Terraform
+        if: ${{ env.AWS_BUILD == 'true' }}
+        run: terraform plan -var aws_ami=${{ needs.golden_aws_ami_build_pipeline.outputs.aws_ami_id  }}
+        working-directory: ${{ github.workspace }}/packer/terraform/aws/
+
+      - name: AWS instance - Apply Terraform configuration
+        if: ${{ env.AWS_BUILD == 'true' }}
+        id: aws_ec2_launch
+        run: |
+          terraform apply -var aws_ami=${{ needs.golden_aws_ami_build_pipeline.outputs.aws_ami_id }} -auto-approve
+          instance_id=$(terraform output -raw instance_id)
+          echo $instance_id
+          echo "::set-output name=instance_id::${instance_id}"
+        working-directory: ${{ github.workspace }}/packer/terraform/aws/
+
+      - name: Get user names from team
+        env:
+          GH_TOKEN: ${{ secrets.ADMIN_REPO_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ADMIN_REPO_TOKEN }}
+          GH_HOST: github.cadence.com
+        run: |
+          echo ${{ secrets.ADMIN_REPO_TOKEN }} | GH_HOST=github.cadence.com /gh-runner/bin/gh auth login --with-token
+          teamMembers="$(GH_HOST=github.cadence.com /gh-runner/bin/gh api orgs/IT/teams/Cloud30_Admin/members | jq -r '.[].login' | paste -sd, -)"
+          echo 'TEAM_MEMBERS='$teamMembers >> $GITHUB_ENV
+          echo ${{ env.TEAM_MEMBERS }}
+
+      - name: Wait for tf apply approval
+        id: manual_approval
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/approval-action-main
+        with:
+          approvers: ${{ env.TEAM_MEMBERS }}
+          token: ${{ secrets.REPO_TOKEN }}
+          issueTitle: "tf approval"
+          issueBody: "Tf approval request pending"
+          approveWords: 'apply,approve, approved,destroy'
+          rejectWords: 'deny, denied, reject, rejected'
+          issueLabels: 'ManualApproval,ApprovalAction'
+          waitInterval: '1'
+          waitTimeout: '45'
+          minimumApprovals: '1'
+
+      - name: Approval Result
+        id: approval_result
+        if: ${{ steps.manual_approval.outputs.approved == 'true' }}
+        run: |
+          echo "approved=approved" >> $GITHUB_OUTPUT
+          echo "::set-output name=approved::approved"
+
+  promote-openstack-ami:
+    name: OpenStack Promote Image
+    runs-on: [ cadence-cloud ]
+    needs: [ run_validation_tests,
+             golden_openstack_image_next_version,
+             golden_openstack_image_build_pipeline,
+             golden_aws_ami_build_pipeline
+    ]
+    if: ${{ needs.run_validation_tests.outputs.approved == 'approved' }}
+    outputs:
+      release_id: ${{ steps.create_release_id.outputs.id }}
+    environment: 'release'
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v3
+      
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+      
+      - name: Configure AWS Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload OpenStack image
+        env:
+          IMAGE_ID: ${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id }}
+          IMAGE_PREFIX: ${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_prefix }}
+          NEXT_RELEASE:  ${{ needs.golden_openstack_image_next_version.outputs.nextrelease }}
+          AMI_ID:  ${{ needs.golden_aws_ami_build_pipeline.outputs.aws_ami_id }}
+          INSTANCE_ID: ${{ needs.run_validation_tests.outputs.instance_id }}
+          OPS_INSTANCE_ID: ${{ needs.run_validation_tests.outputs.ops_instance_id }}
+        run: |
+          image_name=$(echo "${{ env.IMAGE_PREFIX }}-${{ env.NEXT_RELEASE }}")
+          existing_image_id=$(openstack image list --name $image_name -f json | jq -r '.[-1].ID')
+          if [[ $existing_image_id != null ]]; then openstack image delete $existing_image_id ; echo "***OpenStack *** Existing $existing_image_id deleted"; fi
+          openstack image set --name $image_name  ${{ env.IMAGE_ID }}
+          echo "Image InstaceID:"${{ env.OPS_INSTANCE_ID }}
+          # openstack image delete  ${{ env.IMAGE_ID }}
+          # echo "Image: "${{ env.IMAGE_ID }}" deleted."
+          # openstack server image create --name $image_name --wait ${{ env.OPS_INSTANCE_ID }}
+          existing_ami_id=$(aws ec2 describe-images --filters "Name=tag:Name,Values=$image_name" --query 'Images[*].[ImageId]' --output text) 
+          NOW=$(date +'%Y-%m-%dT%H_%M_%S')
+          clone_image_name=$(echo "$image_name""-$NOW")
+          if [[ $existing_ami_id != '' ]]; then aws ec2 copy-image --name $clone_image_name --source-image-id $existing_ami_id --source-region ${{ secrets.AWS_REGION }} \
+          --tag-specifications "ResourceType=image,Tags=[{Key=Name,Value=$image_name},{Key=Timestamp,Value=$NOW}]"; \
+          aws ec2 deregister-image --image-id $existing_ami_id; echo "Existing $existing_ami_id cloned & deleted"; fi 
+          if [ "${{ env.AWS_BUILD }}" == "true" ]; then
+            image_create_id=$(aws ec2 create-image --name $image_name --instance-id ${{ env.INSTANCE_ID }} --tag-specifications "ResourceType=image,Tags=[{Key=Name,Value=$image_name}]" | jq -r '.ImageId')
+            echo "***AWS*** Image $image_create_id is uploading"
+            # Step 2: Check Image Creation Status
+            while true; do
+                create_status=$(aws ec2 describe-images --image-ids $image_create_id | jq -r '.Images[-1].State')
+                echo "Create status: $create_status"
+                if [ "$create_status" == "available" ]; then
+                    break
+                elif [ "$create_status" == "failed" ]; then
+                    echo "Image creation failed or was canceled."
+                    exit 1
+                fi
+                sleep 30 # Check status every 30 seconds
+            done
+          fi
+          echo "AMI created: $image_create_id"
+
+      - name: Create release
+        id: create_release_id
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+        with:
+          tag_name: ${{ needs.golden_openstack_image_next_version.outputs.nextrelease }}
+          release_name: Release ${{ needs.golden_openstack_image_next_version.outputs.nextrelease }}
+
+  deprovison:
+    name: Deprovision Resources
+    runs-on: [ cadence-cloud ]
+    needs: [ promote-openstack-ami,
+             golden_openstack_image_build_pipeline,
+             golden_aws_ami_build_pipeline
+    ]
+    if: ${{ always() }}
+    steps:
+      - name: Checkout the files
+        uses: actions/checkout@v3
+
+      - name: Checkout the files
+        uses: actions/checkout@v3
+        with:
+          repository: IT/OnCloud_IaC_Github_Actions
+          path: ./OnCloud_IaC_Github_Actions
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: ./OnCloud_IaC_Github_Actions/.github/actions/configure-aws-credentials-master
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Delete OpenStack Image
+        if: ${{ needs.promote-openstack-ami.outputs.release_id == '' }}
+        run: |
+          openstack image delete ${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id }}
+
+      - name: Deregister AMI
+        if: ${{ env.AWS_BUILD == 'true' }}
+        run: |
+          aws ec2 deregister-image --image-id ${{ needs.golden_aws_ami_build_pipeline.outputs.aws_ami_id }}
+
+      - name: OpenStack instance - Initialize Terraform
+        run: terraform init -var os_image_id=${{ needs.golden_openstack_image_build_pipeline.outputs.openstack_image_id }}
+        working-directory: ${{ github.workspace }}/packer/terraform/openstack/
+
+      - name: OpenStack instance - destroy Terraform configuration
+        run: terraform destroy -auto-approve
+        working-directory: ${{ github.workspace }}/packer/terraform/openstack/
+
+      - name: AWS instance - Initialize Terraform
+        if: ${{ env.AWS_BUILD == 'true' }}
+        run: terraform init -var aws_ami=${{ needs.golden_aws_ami_build_pipeline.outputs.aws_ami_id }}
+        working-directory: ${{ github.workspace }}/packer/terraform/aws/
+
+      - name: AWS instance - destroy Terraform configuration
+        if: ${{ env.AWS_BUILD == 'true' }}
+        run: | 
+          terraform destroy -auto-approve
+        working-directory: ${{ github.workspace }}/packer/terraform/aws/
