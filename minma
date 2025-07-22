@@ -4,7 +4,8 @@ CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/oa41.tfvars.json
 CustomerVPC/terraform/config/envs/prod/prod/prod-1/oa41/terragrunt.hcl
 
 
-
+Host aggregate testing completed successfully.
+Created 10 VMs with flavor c2m4 on low-memory-hosts (tst-overcloud-compute-02) and 10 VMs with flavor m1.large on high-memory-hosts (tst-overcloud-compute-01).
 
 cc-rhel86-baremtal-v2.3.1 - 2e8183f4-4672-4461-a527-a017a4477153
 
