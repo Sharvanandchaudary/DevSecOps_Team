@@ -9,6 +9,58 @@ if [ -z "$aws_cc_chamber" ] || [ -z "$os_chamber" ]; then
 fi
 
 
+✅ Option 2: Delete servers, volumes, and ports
+If you want a full cleanup (servers, volumes, and ports), you can use the same names you created:
+
+bash
+Copy
+Edit
+#!/bin/bash
+
+for i in $(seq -w 1 10); do
+  echo "===== Cleaning up VM $i ====="
+
+  # Delete the server
+  echo "Deleting server test-lowmem-vm-$i..."
+  openstack server delete test-lowmem-vm-$i
+
+  # Delete the volume
+  echo "Deleting volume test-lowmem-vol-$i..."
+  openstack volume delete test-lowmem-vol-$i
+
+  # Delete the port
+  echo "Deleting port test-lowmem-port-$i..."
+  openstack port delete test-lowmem-port-$i
+
+done
+
+echo "✅ Cleanup script finished."
+💡 Steps to use
+Save your preferred script (Option 1 or 2) to a file, for example:
+
+bash
+Copy
+Edit
+nano delete_10_lowmem.sh
+Paste the script, save (CTRL+O, Enter), and exit (CTRL+X).
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x delete_10_lowmem.sh
+Run it:
+
+bash
+Copy
+Edit
+./delete_10_lowmem.sh
+
+
+
+
+
 
 
 ✅ Single‑line script to show: Instance Name | Flavor | Aggregates
