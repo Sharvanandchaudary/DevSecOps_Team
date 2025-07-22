@@ -9,6 +9,62 @@ if [ -z "$aws_cc_chamber" ] || [ -z "$os_chamber" ]; then
 fi
 
 
+✅ delete_10_highmem.sh
+bash
+Copy
+Edit
+#!/bin/bash
+
+for i in $(seq -w 1 10); do
+  echo "===== Cleaning up HIGHMEM VM $i ====="
+
+  # Delete the server
+  echo "Deleting server test-highmem-vm-$i..."
+  openstack server delete test-highmem-vm-$i
+
+  # Delete the volume
+  echo "Deleting volume test-highmem-vol-$i..."
+  openstack volume delete test-highmem-vol-$i
+
+  # Delete the port
+  echo "Deleting port test-highmem-port-$i..."
+  openstack port delete test-highmem-port-$i
+
+done
+
+echo "✅ Highmem cleanup script finished."
+✅ Steps to use:
+Create the script file:
+
+bash
+Copy
+Edit
+nano delete_10_highmem.sh
+Paste the script above, save (CTRL+O, Enter), and exit (CTRL+X).
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x delete_10_highmem.sh
+Run it:
+
+bash
+Copy
+Edit
+./delete_10_highmem.sh
+✅ This will delete:
+
+Servers: test-highmem-vm-01 to test-highmem-vm-10
+
+Volumes: test-highmem-vol-01 to test-highmem-vol-10
+
+Ports: test-highmem-port-01 to test-highmem-port-10
+
+If you also need to delete floating IPs that were created for each VM, let me know — I can add that as well! 🚀
+
+
 ✅ Option 2: Delete servers, volumes, and ports
 If you want a full cleanup (servers, volumes, and ports), you can use the same names you created:
 
