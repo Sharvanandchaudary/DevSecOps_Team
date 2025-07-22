@@ -8,6 +8,52 @@ if [ -z "$aws_cc_chamber" ] || [ -z "$os_chamber" ]; then
     exit 1
 fi
 
+
+
+
+✅ Single‑line script to show: Instance Name | Flavor | Aggregates
+bash
+Copy
+Edit
+for i in $(openstack server list -f value -c Name); do \
+  FLAVOR=$(openstack server show "$i" -f value -c flavor | awk '{print $2}'); \
+  AGGRS=$(openstack aggregate list -f value -c Name | while read ag; do \
+            openstack aggregate show "$ag" -f value -c Hosts -c Properties | grep -q "$FLAVOR" && echo $ag; \
+         done); \
+  echo "$i | $FLAVOR | $AGGRS"; \
+done
+⚡ Simpler (just name + flavor)
+bash
+Copy
+Edit
+openstack server list --long -c Name -c Flavor
+✨ If you know your flavor uses extra_specs (like node_type=lowmem):
+You can tie it to aggregates by matching the metadata:
+
+bash
+Copy
+Edit
+for i in $(openstack server list -f value -c Name); do \
+  FLAVOR=$(openstack server show $i -f value -c flavor | awk '{print $2}'); \
+  EXTRA=$(openstack flavor show $FLAVOR -f json | grep -i node_type | awk -F'"' '{print $4}'); \
+  AGGR=$(openstack aggregate list -f value -c Name | while read ag; do \
+    openstack aggregate show "$ag" -f json | grep -q "$EXTRA" && echo $ag; done); \
+  echo "$i | $FLAVOR | $AGGR"; \
+done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 for i in $(seq -w 1 10); do
   vm="test-lowmem-vm-$i"
   host=$(openstack server show $vm -f value -c OS-EXT-SRV-ATTR:host)
