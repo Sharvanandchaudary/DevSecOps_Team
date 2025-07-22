@@ -1,0 +1,201 @@
+✅ 1. Convert your commands into a loop
+You can loop through numbers (e.g. 01 to 10) and run the same steps for each VM.
+Below is a bash script that will create 10 VMs by repeating the port, volume, and server creation with unique names.
+
+✅ 2. Example script to create 10 VMs
+Save as create_10_vms.sh (or run directly in your shell):
+
+bash
+Copy
+Edit
+#!/bin/bash
+
+# Loop through 1 to 10
+for i in $(seq -w 1 10); do
+  echo "===== Creating VM $i ====="
+
+  # Create port
+  port_id=$(openstack port create \
+    --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+    --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+    --enable test-lowmem-port-$i -f json | jq -r '.id')
+  echo "Created port: $port_id"
+
+  # Set security groups
+  openstack port set \
+    --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+    --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+    --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+    --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+    $port_id
+
+  # Create floating IP
+  openstack floating ip create -f json \
+    --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+    --port $port_id pro-net-vlan1162 > /dev/null
+  echo "Floating IP created for VM $i"
+
+  # Create bootable volume
+  volume_id=$(openstack volume create -f json \
+    --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+    --size 125 \
+    --bootable test-lowmem-vol-$i | jq -r '.id')
+  echo "Created volume: $volume_id"
+
+  # Wait for volume to be available
+  while true; do
+    status=$(openstack volume show $volume_id -f value -c status)
+    if [ "$status" = "available" ]; then
+      break
+    else
+      echo "Waiting for volume $volume_id to become available..."
+      sleep 5
+    fi
+  done
+
+  # Create server
+  openstack server create \
+    --flavor c2m4 \
+    --volume $volume_id \
+    --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+    --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+    --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+    --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+    --port $port_id \
+    --key-name c30-drm-keypair \
+    --wait test-lowmem-vm-$i
+
+  echo "✅ VM $i created successfully"
+done
+✅ 3. Make the script executable and run
+bash
+Copy
+Edit
+chmod +x create_10_vms.sh
+./create_10_vms.sh
+🔧 Notes
+Each VM, port, and volume is uniquely named with -$i (e.g. test-lowmem-vm-01, test-lowmem-vm-02, … test-lowmem-vm-10).
+
+This script assumes the same network, subnet, snapshot, and flavor for all.
+
+Adjust m1.large instead of c2m4 if you want high‑mem VMs.
+
+✅ 4. Verify hosts for all
+After creation, you can loop through them to check placement:
+
+bash
+Copy
+Edit
+for i in $(seq -w 1 10); do
+  echo "VM $i host:"
+  openstack server show test-lowmem-vm-$i -f value -c OS-EXT-SRV-ATTR:host
+done
+If you’d like, I can help you add parallel creation or export logs of each VM.
+Let me know if you want me to tweak this script for your exact environment! 🚀
+
+
+
+
+
+
+✅ Script: create_10_highmem_vms.sh
+bash
+Copy
+Edit
+#!/bin/bash
+
+# Loop through 1 to 10
+for i in $(seq -w 1 10); do
+  echo "===== Creating HIGHMEM VM $i ====="
+
+  # Create port
+  port_id=$(openstack port create \
+    --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+    --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+    --enable test-highmem-port-$i -f json | jq -r '.id')
+  echo "Created port: $port_id"
+
+  # Set security groups
+  openstack port set \
+    --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+    --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+    --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+    --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+    $port_id
+
+  # Create and associate floating IP
+  openstack floating ip create -f json \
+    --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+    --port $port_id pro-net-vlan1162 > /dev/null
+  echo "Floating IP created for VM $i"
+
+  # Create bootable volume from snapshot
+  volume_id=$(openstack volume create -f json \
+    --snapshot e355ab4b-a2f5-4a25-a0c8-2523816c9678 \
+    --size 125 \
+    --bootable test-highmem-vol-$i | jq -r '.id')
+  echo "Created volume: $volume_id"
+
+  # Wait for volume to be available
+  while true; do
+    status=$(openstack volume show $volume_id -f value -c status)
+    if [ "$status" = "available" ]; then
+      break
+    else
+      echo "Waiting for volume $volume_id to become available..."
+      sleep 5
+    fi
+  done
+
+  # Create server using high-memory flavor
+  openstack server create \
+    --flavor m1.large \
+    --volume $volume_id \
+    --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+    --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+    --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+    --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+    --port $port_id \
+    --key-name c30-drm-keypair \
+    --wait test-highmem-vm-$i
+
+  echo "✅ Highmem VM $i created successfully"
+done
+✅ How to run
+Save the script as create_10_highmem_vms.sh:
+
+bash
+Copy
+Edit
+chmod +x create_10_highmem_vms.sh
+./create_10_highmem_vms.sh
+✅ How to verify host placement
+After the script finishes:
+
+bash
+Copy
+Edit
+for i in $(seq -w 1 10); do
+  echo "VM $i host placement:"
+  openstack server show test-highmem-vm-$i -f value -c OS-EXT-SRV-ATTR:host
+done
+✅ Expected output: all should show
+tst-overcloud-compute-01.openstack.cadence.com
+
+✅ Optional cleanup for highmem VMs
+When you want to delete them:
+
+bash
+Copy
+Edit
+for i in $(seq -w 1 10); do
+  openstack server delete test-highmem-vm-$i
+  openstack volume delete test-highmem-vol-$i
+  openstack port delete test-highmem-port-$i
+done
+Summary:
+✔️ This script creates 10 high‑memory VMs (m1.large).
+✔️ You already have a separate script for 10 low‑memory VMs (c2m4).
+✔️ Both sets will be uniquely named and placed on their respective aggregates.
+
+If you want, I can also combine both into a single script or add logging. Let me know! 🚀
