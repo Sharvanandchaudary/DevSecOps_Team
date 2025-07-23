@@ -1,0 +1,134 @@
+✅ Option 1 (Recommended): Build a Clean UEFI Image
+This is the safest and most supportable.
+
+Create a new VM with UEFI firmware enabled:
+
+In your virtualization platform (KVM/VirtualBox/VMware), enable UEFI/OVMF in firmware settings.
+
+Attach the rhel-8.6-x86_64-dvd.iso installer.
+
+Install RHEL 8.6 with proper partitions:
+
+Custom partitioning:
+
+Mount	Size	FS
+/boot/efi	600 MB	vfat
+/boot	1 GB	xfs
+swap	2 GB	swap
+/	rest	xfs
+
+Minimal install + cloud-init package.
+
+Inside VM after install:
+
+bash
+Copy
+Edit
+dnf install -y cloud-init
+systemctl enable cloud-init cloud-config cloud-final
+cloud-init clean --logs
+rm -f /etc/ssh/ssh_host_*
+truncate -s 0 /etc/machine-id
+Shutdown VM and export disk:
+
+bash
+Copy
+Edit
+qemu-img convert -O qcow2 /var/lib/libvirt/images/<diskname>.qcow2 rhel86-uefi.qcow2
+Upload to OpenStack Glance:
+
+bash
+Copy
+Edit
+openstack image create \
+  --container-format bare \
+  --disk-format qcow2 \
+  --public \
+  --file rhel86-uefi.qcow2 \
+  rhel8.6-baremetal
+Deploy to baremetal using this image.
+
+✅ This will boot on baremetal because it was built in UEFI mode with a proper EFI partition.
+
+✅ Option 2: Convert your existing VM image (Advanced, Risky)
+If you want to try converting your existing running 8.6 VM to UEFI mode instead of reinstalling:
+
+Add an EFI partition:
+
+Either shrink your root or add a second small disk (600 MB):
+
+bash
+Copy
+Edit
+parted /dev/sda
+mkpart EFI fat32 1MiB 601MiB
+set 1 boot on
+set 1 esp on
+mkfs.vfat /dev/sda1
+mkdir /boot/efi
+mount /dev/sda1 /boot/efi
+(Adjust device name accordingly.)
+
+Install UEFI packages:
+
+bash
+Copy
+Edit
+dnf install -y grub2-efi-x64 shim-x64 efibootmgr
+Reinstall GRUB for UEFI:
+
+bash
+Copy
+Edit
+grub2-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=RHEL
+grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg
+Update fstab:
+
+bash
+Copy
+Edit
+blkid /dev/sda1   # get UUID
+vi /etc/fstab
+# Add line:
+UUID=<efi-uuid>  /boot/efi  vfat  defaults,uid=0,gid=0,umask=077,shortname=winnt 0 2
+Clean up like before (cloud-init clean, machine-id reset), shutdown, export qcow2, and upload to Glance.
+
+Deploy to baremetal and test.
+
+⚠️ Note: If your current disk is already fully allocated and you can’t add an EFI partition, conversion won’t be possible. That’s why building fresh is better.
+
+🚦 Why your current image doesn’t boot
+It was installed in BIOS/legacy mode (no /boot/efi, no EFI bootloader).
+
+Your baremetal firmware is configured for UEFI only.
+
+So the server never finds a valid bootloader.
+
+✨ Final recommendation
+👉 The clean rebuild in UEFI mode (Option 1) is the fastest, cleanest way to guarantee it will boot on baremetal.
+
+✅ If you want help with Option 1
+I can:
+
+Give you a ready Kickstart file to automate the install,
+
+Or guide you step-by-step with screenshots.
+
+✅ If you want help with Option 2
+I can:
+
+Provide exact partitioning commands,
+
+Walk you through GRUB installation.
+
+👉 Let me know which option you want to follow, and I’ll prepare all commands and configs for you! 🚀
+
+
+
+
+
+
+
+
+You said:
+we will go woth o
