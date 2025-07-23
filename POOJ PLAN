@@ -1,6 +1,67 @@
 📅 7/20 – 8/1 FULL‑DAY SCHEDULE (Morning to Evening)
 Daily Time Table:
 
+
+
+
+Daily Status Report – CLOUD3‑759
+
+Goal:
+The goal for today was to work on Jira ticket CLOUD3‑759, focusing on end‑to‑end testing and debugging of the RHEL 8.6 image for baremetal deployment.
+This involved creating multiple VMs to replicate the baremetal environment, comparing image partition layouts between RHEL 8.6 and RHEL 9.2, identifying root causes for boot failures, and validating a fix.
+In parallel, the goal also included validating the new GitHub Actions approval workflow to ensure it functions as expected, passes outputs between steps correctly, and can be safely rolled out to other workflows.
+
+Work Done:
+
+Created several VMs using different RHEL images to replicate the baremetal deployment environment for detailed testing.
+
+Performed deep analysis on partition layouts using lsblk and fstab to compare RHEL 8.6 and RHEL 9.2 images.
+
+Verified that storage drivers (SATA/AHCI) are identical and functioning properly on both images, eliminating driver issues as a cause.
+
+Identified that the RHEL 8.6 image is missing the EFI boot partition (/boot/efi), which is required for UEFI boot on baremetal.
+
+Documented that while the drivers and kernel modules are consistent across images, the absence of the EFI partition is the key difference preventing successful boot.
+
+Iteratively brought up VMs with all available images, tested boot behavior, and validated findings through multiple debugging sessions.
+
+Captured all observations and next steps in the CLOUD3‑759 Jira ticket for further action and remediation.
+
+GitHub Actions Approval Workflow:
+
+Implemented and tested the approval workflow in a dedicated test pipeline.
+
+Validated that the workflow blocks execution until approval is granted and that the approval step works without errors.
+
+Confirmed that after approval, the workflow passes all required outputs and context data cleanly to subsequent steps.
+
+Ran multiple test iterations to ensure consistency, stability, and reliability of the workflow under different conditions.
+
+Documented that the workflow can now be confidently implemented in other pipelines that require an approval checkpoint.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 Time	Focus	Details
 7:30 AM – 9:00 AM	Core Topic Study	Read/learn the day’s AI/ML topic (books, course, notes).
 9:00 AM – 10:30 AM	Hands‑On Session #1	Code a basic implementation of that topic.
