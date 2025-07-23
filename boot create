@@ -1,0 +1,51 @@
+metal
+
+context
+when building a rhel 8.6 image to boot on bare metal servers the image must include a proper partition layout that supports uefi firmware and rhel installation requirements
+
+required partitions
+/boot/efi – 200 mb (minimum 100 mb) – vfat – stores uefi bootloaders and is required for uefi firmware
+/boot – at least 1 gb – xfs or ext4 – holds kernel, initramfs and grub configuration
+/ (root) – at least 10 gb (20 gb recommended) – xfs – main operating system and application files
+swap – optional 1 to 2 times ram, often 2 gb or 4 gb – swap – used for paging
+/home – optional size as needed – xfs – user home directories
+optional partitions /var, /tmp, /usr – only if isolating workloads
+
+creating partitions during installation or image build
+	1.	when installing using the anaconda installer
+choose custom partitioning and create mount points with the sizes mentioned above
+create /boot/efi as vfat 200 mb
+create /boot as xfs 1 gb
+create / as xfs 20 gb
+create swap as needed
+optionally create /home
+	2.	when using a kickstart file
+example snippet
+part /boot/efi –fstype=“efi” –size=200
+part /boot –fstype=“xfs” –size=1024
+part swap –fstype=“swap” –size=2048
+part / –fstype=“xfs” –grow –size=10240
+	3.	when customizing an existing image
+inspect with lsblk or parted -l
+if /boot/efi is missing create a 200 mb partition as vfat and mount to /boot/efi
+run grub2-install and grub2-mkconfig to update bootloader
+ensure /boot is at least 1 gb
+
+validation after creation
+run lsblk to confirm partitions
+expected layout example
+sda1 200m vfat mounted on /boot/efi
+sda2 1g xfs mounted on /boot
+sda3 2g swap
+sda4 20g xfs mounted on /
+
+check /etc/fstab to confirm entries for /boot/efi, /boot, / and swap
+
+minimum requirements summary
+/boot – 1 gb
+/boot/efi – 200 mb vfat
+root – 10 gb minimum, 20 gb recommended
+swap – optional 2 gb or more
+filesystem – xfs by default except vfat for efi
+
+after these partitions are created and verified the disk can be converted to qcow2 or raw, uploaded to glance, and used for bare metal boot with openstack
