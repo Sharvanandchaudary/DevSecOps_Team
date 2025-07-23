@@ -1,0 +1,145 @@
+✨ Save this as create_rhel86_r6i8xlarge.sh
+bash
+Copy
+Edit
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+SEC_GROUP="testing-rhel-sg"
+KEY_NAME="testing-RHEL"
+KEY_FILE="${KEY_NAME}.pem"
+VM_NAME="testvm"
+PORT_NAME="tn02-${VM_NAME}-port"
+NETWORK_ID="3eb39e89-ac62-4b5b-a313-8d52482cc1f2"
+SUBNET_ID="e5db0db9-bf93-43f4-928a-e46e099fef9e"
+FLOATING_SUBNET_ID="e33be8b2-02e2-41a5-87b5-830ba5d0db7a"
+FLAVOR="r6i.8xlarge"
+IMAGE_NAME="rhel86-new"
+# ===== CONFIG =====
+
+echo "=== Step 1: Create security group allowing SSH (22) ==="
+if ! openstack security group list -f value -c Name | grep -q "^${SEC_GROUP}$"; then
+  openstack security group create $SEC_GROUP --description "Allow SSH"
+  openstack security group rule create --proto tcp --dst-port 22 $SEC_GROUP
+  echo "Security group $SEC_GROUP created with SSH access."
+else
+  echo "Security group $SEC_GROUP already exists."
+fi
+
+echo "=== Step 2: Create key pair and save PEM ==="
+if [ ! -f "$KEY_FILE" ]; then
+  openstack keypair create $KEY_NAME > $KEY_FILE
+  chmod 600 $KEY_FILE
+  echo "Key pair $KEY_NAME created and saved to $KEY_FILE"
+else
+  echo "Key file $KEY_FILE already exists, skipping key creation."
+fi
+
+echo "=== Step 3: Get image ID for $IMAGE_NAME ==="
+IMAGE_ID=$(openstack image list -f value -c ID -c Name | grep "$IMAGE_NAME" | awk '{print $1}')
+if [ -z "$IMAGE_ID" ]; then
+  echo "ERROR: Image $IMAGE_NAME not found."
+  exit 1
+fi
+echo "Using image ID: $IMAGE_ID"
+
+echo "=== Step 4: Create port in TN02 network ==="
+PORT_ID=$(openstack port create \
+  --network $NETWORK_ID \
+  --fixed-ip subnet=$SUBNET_ID \
+  --enable $PORT_NAME -f json | jq -r '.id')
+echo "Created port: $PORT_ID"
+
+echo "=== Step 5: Assign security group to port ==="
+openstack port set --security-group $SEC_GROUP $PORT_ID
+echo "Security group $SEC_GROUP applied to port $PORT_ID"
+
+echo "=== Step 6: Create and associate floating IP ==="
+FLOATING_IP_JSON=$(openstack floating ip create -f json --subnet $FLOATING_SUBNET_ID --port $PORT_ID pro-net-vlan1162)
+FLOATING_IP=$(echo $FLOATING_IP_JSON | jq -r '.floating_ip_address')
+echo "Floating IP created and associated: $FLOATING_IP"
+
+echo "=== Step 7: Launch server ==="
+openstack server create \
+  --flavor $FLAVOR \
+  --image $IMAGE_ID \
+  --port $PORT_ID \
+  --key-name $KEY_NAME \
+  --security-group $SEC_GROUP \
+  --wait $VM_NAME
+echo "Server $VM_NAME created successfully."
+
+echo "=== Step 8: Verify placement ==="
+HOST=$(openstack server show $VM_NAME -f value -c OS-EXT-SRV-ATTR:host)
+echo "VM $VM_NAME is running on host: $HOST"
+
+echo "=== Step 9: SSH command ==="
+echo "Use this to connect:"
+echo "ssh -i $KEY_FILE cloud-user@$FLOATING_IP"
+✨ How to run
+Save the script:
+
+bash
+Copy
+Edit
+nano create_rhel86_r6i8xlarge.sh
+# Paste the script above, save with CTRL+O and exit with CTRL+X
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x create_rhel86_r6i8xlarge.sh
+Run it:
+
+bash
+Copy
+Edit
+./create_rhel86_r6i8xlarge.sh
+✅ What you get
+A new security group testing-rhel-sg with port 22 open.
+
+A new key pair testing-RHEL saved as testing-RHEL.pem.
+
+A new port in TN02 network with that SG.
+
+A new floating IP associated.
+
+A new server testvm from image rhel86-new and flavor r6i.8xlarge.
+
+Printed output showing:
+
+Port ID
+
+Floating IP
+
+Host placement
+
+Final SSH command, for example:
+
+kotlin
+Copy
+Edit
+VM testvm is running on host: tst-overcloud-compute-01.openstack.cadence.com
+Use this to connect:
+ssh -i testing-RHEL.pem cloud-user@10.107.xx.xx
+If you want me to tweak names or allow more ports, let me know — happy to help! 🚀
+
+
+
+
+
+
+
+
+
+Ask ChatGPT
+
+
+
+Tools
+
+
+
+ChatGPT can make
