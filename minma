@@ -12,7 +12,100 @@ cc-rhel86-baremtal-v2.3.1 - 2e8183f4-4672-4461-a527-a017a4477153
 
 
 
+✨ Save this script to a file
+bash
+Copy
+Edit
+nano create_rhel86_vm.sh
+Paste the following script inside:
 
+bash
+Copy
+Edit
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+KEY_NAME="tn02-rhel86-key"
+KEY_FILE="${KEY_NAME}.pem"
+PORT_NAME="tn02-rhel86-port"
+VM_NAME="tn02-rhel86-vm"
+NETWORK_ID="3eb39e89-ac62-4b5b-a313-8d52482cc1f2"
+SUBNET_ID="e5db0db9-bf93-43f4-928a-e46e099fef9e"
+FLOATING_SUBNET_ID="e33be8b2-02e2-41a5-87b5-830ba5d0db7a"
+FLAVOR="m1.large"
+IMAGE_NAME="rhel86-new"
+# ===== CONFIG =====
+
+echo "=== Step 1: Create key pair and save PEM ==="
+if [ -f "$KEY_FILE" ]; then
+  echo "Key file $KEY_FILE already exists locally, skipping creation."
+else
+  openstack keypair create "$KEY_NAME" > "$KEY_FILE"
+  chmod 600 "$KEY_FILE"
+  echo "Key pair $KEY_NAME created and saved to $KEY_FILE"
+fi
+
+echo "=== Step 2: Find image ID for $IMAGE_NAME ==="
+IMAGE_ID=$(openstack image list -f value -c ID -c Name | grep "$IMAGE_NAME" | awk '{print $1}')
+if [ -z "$IMAGE_ID" ]; then
+  echo "ERROR: Image $IMAGE_NAME not found!"
+  exit 1
+fi
+echo "Using image ID: $IMAGE_ID"
+
+echo "=== Step 3: Create port ==="
+PORT_ID=$(openstack port create \
+  --network "$NETWORK_ID" \
+  --fixed-ip subnet=$SUBNET_ID \
+  --enable "$PORT_NAME" -f json | jq -r '.id')
+echo "Created port: $PORT_ID"
+
+echo "=== Step 4: Set security groups on port ==="
+openstack port set \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  "$PORT_ID"
+echo "Security groups set on port $PORT_ID"
+
+echo "=== Step 5: Create floating IP and associate ==="
+FLOATING_IP_JSON=$(openstack floating ip create -f json --subnet $FLOATING_SUBNET_ID --port $PORT_ID pro-net-vlan1162)
+FLOATING_IP=$(echo $FLOATING_IP_JSON | jq -r '.floating_ip_address')
+echo "Floating IP created: $FLOATING_IP"
+
+echo "=== Step 6: Create server ==="
+openstack server create \
+  --flavor $FLAVOR \
+  --image $IMAGE_ID \
+  --port $PORT_ID \
+  --key-name $KEY_NAME \
+  --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+  --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+  --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+  --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+  --wait $VM_NAME
+echo "Server $VM_NAME created successfully."
+
+echo "=== Step 7: Verify placement ==="
+HOST=$(openstack server show $VM_NAME -f value -c OS-EXT-SRV-ATTR:host)
+echo "VM $VM_NAME is running on host: $HOST"
+
+echo "=== Step 8: SSH instructions ==="
+echo "Use the following command to SSH into the VM:"
+echo "ssh -i $KEY_FILE cloud-user@$FLOATING_IP"
+✨ Make the script executable
+bash
+Copy
+Edit
+chmod +x create_rhel86_vm.sh
+✨ Run the script
+bash
+Copy
+Edit
+./create_rhel86_vm.sh
+????????????????????????????????????????????????
 
 
 ✅ 1. Create a port
