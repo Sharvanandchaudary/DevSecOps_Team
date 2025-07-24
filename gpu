@@ -1,0 +1,111 @@
+ou’re absolutely right — you already provided the security groups earlier.
+Let’s reuse them instead of asking for new ones.
+From your past chats, these are the SGs you’ve been consistently using in TB02:
+
+Copy
+Edit
+b3455868-8842-4b16-9f35-684e25f25f28
+1320ddfd-e090-4300-8d9c-c0d10dfaf84b
+c741134d-43d3-4419-bb55-ba6e60bead75
+58269c3b-bd2d-4287-aedc-2e2f2c744c19
+I’ll update the script accordingly.
+
+✅ Step 1: Flavor creation (GPU)
+bash
+Copy
+Edit
+openstack flavor create m1.gpu --vcpus 8 --ram 32768 --disk 100
+openstack flavor set m1.gpu --property aggregate_instance_extra_specs:gpu_host=true
+✅ Step 2: TB02 Script (3 VMs, with input option)
+bash
+Copy
+Edit
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+FLAVOR="m1.gpu"
+IMAGE_NAME="rhel86-new"
+KEY_NAME="veera"
+
+# Reusing your existing security groups
+SEC_GROUPS=(
+  b3455868-8842-4b16-9f35-684e25f25f28
+  1320ddfd-e090-4300-8d9c-c0d10dfaf84b
+  c741134d-43d3-4419-bb55-ba6e60bead75
+  58269c3b-bd2d-4287-aedc-2e2f2c744c19
+)
+
+# TB02 Network IDs (from previous chat)
+NETWORK_ID="3eb39e89-ac62-4b5b-a313-8d52482cc1f2"
+SUBNET_ID="e5db0db9-bf93-43f4-928a-e46e099fef9e"
+FLOATING_SUBNET_ID="e33be8b2-02e2-41a5-87b5-830ba5d0db7a"
+
+# ===== ASK FOR INPUT =====
+read -p "How many GPU VMs do you want to create? " COUNT
+
+for i in $(seq -w 1 $COUNT); do
+  echo "===== Creating GPU VM $i ====="
+  
+  PORT_NAME="tb02-gpu-port-$i"
+  VM_NAME="tb02-gpu-vm-$i"
+
+  # Create port
+  PORT_ID=$(openstack port create \
+    --network $NETWORK_ID \
+    --fixed-ip subnet=$SUBNET_ID \
+    --enable $PORT_NAME -f json | jq -r '.id')
+  echo "Created port: $PORT_ID"
+
+  # Assign security groups
+  for SG in "${SEC_GROUPS[@]}"; do
+    openstack port set --security-group $SG $PORT_ID
+  done
+  echo "Security groups set on port: $PORT_ID"
+
+  # Create floating IP
+  FIP_JSON=$(openstack floating ip create -f json --subnet $FLOATING_SUBNET_ID --port $PORT_ID pro-net-vlan1162)
+  FLOATING_IP=$(echo $FIP_JSON | jq -r '.floating_ip_address')
+  echo "Floating IP $FLOATING_IP assigned to $PORT_ID"
+
+  # Create server
+  openstack server create \
+    --flavor $FLAVOR \
+    --image $IMAGE_NAME \
+    --port $PORT_ID \
+    --key-name $KEY_NAME \
+    --wait $VM_NAME
+  echo "✅ GPU VM $i ($VM_NAME) created successfully with Floating IP $FLOATING_IP"
+done
+✅ How to run
+Save the script as create_gpu_vms.sh:
+
+bash
+Copy
+Edit
+nano create_gpu_vms.sh
+# paste script, then save
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x create_gpu_vms.sh
+Run:
+
+bash
+Copy
+Edit
+./create_gpu_vms.sh
+Input the number of VMs when prompted:
+
+pgsql
+Copy
+Edit
+How many GPU VMs do you want to create? 3
+✅ Summary
+✔ Uses your existing security groups
+✔ Uses TB02 network IDs you’ve been working with
+✔ Creates a GPU flavor (m1.gpu)
+✔ Creates N servers (you choose how many) with ports, floating IPs, and attaches them to GPU aggregate.
+
