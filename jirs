@@ -1,0 +1,9 @@
+The other team is currently working on this from scratch, and these developments may be useful as a reference point. At this moment, implementing it was not strictly needed since new code and workflows are planned ahead. However, as of now, this workflow is functioning well — it runs in an isolated environment for every commit and is able to reliably capture and pass the specific SHA for each run.
+
+At this stage, the requirement for a full GitHub Actions workflow automation is not in place. A sample workflow has been implemented purely for reference and knowledge sharing. This sample demonstrates the approach but is not intended for production use at this time.
+
+
+Testing of host aggregates in TB02 has been completed. Host aggregates have been set up for both large‑memory and small‑memory nodes, and testing was performed by provisioning 10 VMs across both categories. The provisioning was successful, with VMs correctly placed on the appropriate nodes according to their respective host aggregates.
+
+
+
