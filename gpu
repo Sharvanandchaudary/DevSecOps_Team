@@ -1,3 +1,81 @@
+
+
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+FLAVOR="m1.gpu"                # GPU flavor
+KEY_NAME="veera"               # Existing keypair
+SEC_GROUP_NAME="default"       # Or any valid security group name
+
+# ===== DISCOVER NETWORK AND SUBNET =====
+# Get network ID for tn02
+NETWORK_NAME="c30-tn-test-tn-02-network"
+NETWORK_ID=$(openstack network list -f json | jq -r ".[] | select(.Name==\"$NETWORK_NAME\") | .ID")
+
+if [ -z "$NETWORK_ID" ]; then
+  echo "ERROR: Network $NETWORK_NAME not found!"
+  exit 1
+fi
+echo "Using network: $NETWORK_NAME ($NETWORK_ID)"
+
+# Get first subnet ID from that network
+SUBNET_ID=$(openstack subnet list --network "$NETWORK_NAME" -f json | jq -r '.[0].ID')
+
+if [ -z "$SUBNET_ID" ]; then
+  echo "ERROR: No subnet found in network $NETWORK_NAME!"
+  exit 1
+fi
+echo "Using subnet: $SUBNET_ID"
+
+# ===== DISCOVER SECURITY GROUP =====
+SEC_GROUP_ID=$(openstack security group list -f json | jq -r ".[] | select(.Name==\"$SEC_GROUP_NAME\") | .ID")
+if [ -z "$SEC_GROUP_ID" ]; then
+  echo "ERROR: Security group $SEC_GROUP_NAME not found!"
+  exit 1
+fi
+echo "Using security group: $SEC_GROUP_NAME ($SEC_GROUP_ID)"
+
+# ===== ASK HOW MANY VMS =====
+read -p "How many GPU VMs do you want to create? " COUNT
+
+# ===== CREATE VMs =====
+for i in $(seq -w 1 $COUNT); do
+  VM_NAME="test-gpu-vm-$i"
+  PORT_NAME="gpu-port-$i"
+
+  echo "===== Creating VM $VM_NAME ====="
+
+  # Create a port
+  PORT_ID=$(openstack port create \
+    --network "$NETWORK_ID" \
+    --fixed-ip subnet="$SUBNET_ID" \
+    --enable "$PORT_NAME" -f json | jq -r '.id')
+  echo "Created port: $PORT_ID"
+
+  # Attach security group
+  openstack port set --security-group "$SEC_GROUP_ID" "$PORT_ID"
+  echo "Attached security group: $SEC_GROUP_NAME"
+
+  # Create and attach floating IP
+  FLOATING_ID=$(openstack floating ip create public -f json | jq -r '.id')
+  openstack floating ip set --port "$PORT_ID" "$FLOATING_ID"
+  echo "Floating IP assigned."
+
+  # Create the server
+  openstack server create \
+    --flavor "$FLAVOR" \
+    --nic port-id="$PORT_ID" \
+    --key-name "$KEY_NAME" \
+    --wait "$VM_NAME"
+
+  echo "VM $VM_NAME created successfully."
+done
+
+
+
+
+
 new
 #!/bin/bash
 set -e
