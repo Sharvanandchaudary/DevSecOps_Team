@@ -1,4 +1,7 @@
-
+for id in $(openstack port list -f value -c ID -c Name | grep -E "highmem|lowmem" | awk '{print $1}'); do
+  echo "Deleting port: $id"
+  openstack port delete $id
+done
 
 #!/bin/bash
 set -e
