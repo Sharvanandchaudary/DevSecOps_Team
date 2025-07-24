@@ -1,3 +1,70 @@
+new
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+FLAVOR="m1.gpu"                   # GPU flavor
+IMAGE_NAME="rhel86-new"           # Image name if needed (not used here because we boot from volume)
+KEY_NAME="veera"                  # Existing keypair name
+
+# ===== Reuse your existing security groups =====
+SEC_GROUPS=(
+  b3455868-8842-4b16-9f35-684e25f25f28
+  1320d0fd-e090-4300-8d9c-c0d10dfa8f4b
+  c741134d-43d3-4419-bb55-bae660bead75
+  58269c3b-bd2d-4287-aedc-2e2f2c744c19
+)
+
+# ===== TN02 network details (from previous chats) =====
+NETWORK_ID="3eb39e89-ac62-4b5b-a313-8d52482cc1f2"   # Network
+SUBNET_ID="e5db0db9-bf93-43f4-928a-e46e099fef9e"     # Subnet
+FLOATING_SUBNET_ID="e33be8b2-02e2-41a5-87b5-830ba5d0db7a"  # Floating IP subnet
+
+# ===== Ask how many GPU VMs to create =====
+read -p "How many GPU VMs do you want to create? " COUNT
+
+for i in $(seq -w 1 $COUNT); do
+  echo "===== Creating GPU VM $i ====="
+
+  PORT_NAME="tb02-gpu-port-$i"
+  VM_NAME="tb02-gpu-vm-$i"
+
+  # --- Create a port in TN02 network ---
+  # (NETWORK_ID and SUBNET_ID are used here)
+  PORT_ID=$(openstack port create \
+    --network $NETWORK_ID \
+    --fixed-ip subnet=$SUBNET_ID \
+    --enable $PORT_NAME -f json | jq -r '.id')
+  echo "Created port: $PORT_ID"
+
+  # --- Attach all security groups to the port ---
+  for sg in "${SEC_GROUPS[@]}"; do
+    openstack port set --security-group $sg $PORT_ID
+  done
+  echo "Security groups applied to port: $PORT_ID"
+
+  # --- Create and associate a floating IP from TN02 floating subnet ---
+  FLOATING_IP=$(openstack floating ip create $FLOATING_SUBNET_ID -f json | jq -r '.floating_ip_address')
+  echo "Floating IP created: $FLOATING_IP"
+  openstack floating ip set --port $PORT_ID $FLOATING_IP
+  echo "Floating IP $FLOATING_IP associated with port $PORT_ID"
+
+  # --- Create the server with m1.gpu flavor and the created port ---
+  openstack server create \
+    --flavor $FLAVOR \
+    --port $PORT_ID \
+    --key-name $KEY_NAME \
+    --wait $VM_NAME
+
+  echo "GPU VM $VM_NAME created successfully and attached to network with IP $FLOATING_IP"
+done
+
+echo "===== All GPU VMs creation done! ====="
+
+
+
+
+
 ou’re absolutely right — you already provided the security groups earlier.
 Let’s reuse them instead of asking for new ones.
 From your past chats, these are the SGs you’ve been consistently using in TB02:
