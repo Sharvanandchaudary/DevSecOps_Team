@@ -109,3 +109,21 @@ How many GPU VMs do you want to create? 3
 ✔ Creates a GPU flavor (m1.gpu)
 ✔ Creates N servers (you choose how many) with ports, floating IPs, and attaches them to GPU aggregate.
 
+
+
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+VM_PREFIX="test-gpu-vm"   # change this to your VM name prefix
+COUNT=10                  # how many VMs to check
+
+echo "===== Checking which compute nodes the VMs are running on ====="
+
+for i in $(seq -w 1 $COUNT); do
+  VM_NAME="${VM_PREFIX}-${i}"
+  echo ">>> Checking $VM_NAME ..."
+  HOST=$(openstack server show "$VM_NAME" -f value -c OS-EXT-SRV-ATTR:host)
+  echo "$VM_NAME is running on host: $HOST"
+done
+
