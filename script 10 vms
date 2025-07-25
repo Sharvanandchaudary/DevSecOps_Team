@@ -662,10 +662,61 @@ Let me know if you’d like me to tweak it for prefix matching! 🚀
 
 
 
+✅ Script: delete_test_gpu_vms.sh
+bash
+Copy
+Edit
+#!/bin/bash
+
+echo "===== Deleting all servers named test-gpu-vm ====="
+
+# Get all server IDs with name exactly test-gpu-vm
+servers=$(openstack server list --name test-gpu-vm -f value -c ID)
+
+if [ -z "$servers" ]; then
+  echo "No servers found with name test-gpu-vm."
+  exit 0
+fi
+
+for id in $servers; do
+    name=$(openstack server show $id -f value -c name)
+    echo "Deleting server: $name (ID: $id)"
+    openstack server delete $id
+done
+
+echo "✅ All servers named test-gpu-vm have been deleted (delete requests sent)."
+📌 How to run
+Save as delete_test_gpu_vms.sh
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x delete_test_gpu_vms.sh
+Run:
+
+bash
+Copy
+Edit
+./delete_test_gpu_vms.sh
+✨ What it does
+Lists all servers whose name is exactly test-gpu-vm.
+
+Deletes each one by ID.
+
+Prints progress as it deletes.
+
+If you have multiple with names like test-gpu-vm-01, test-gpu-vm-02,
+you can instead use a prefix match:
+
+bash
+Copy
+Edit
+servers=$(openstack server list -f value -c ID -c Name | grep test-gpu-vm | awk '{print $1}')
 
 
 
 
 
-Ask ChatGPT
 
