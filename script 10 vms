@@ -350,3 +350,53 @@ vsaravan@sjcvl-ghrunner1:~$ openstack flavor show m8g.xlarge
 vsaravan@sjcvl-ghrunner1:~$
 
 so create a script use above values for secutiyr groups ann all but the update the image name and flavor name 
+
+
+
+
+#!/bin/bash
+set -e
+
+# Existing bootable volume you want to use
+VOLUME_ID="60b80fac-0dd2-4c4e-a0dd-f161c7bb1b4a"
+
+# Loop through 1 to 2
+for i in $(seq -w 1 2); do
+  echo "===== Creating GPU VM $i ====="
+
+  # Create a new port for this VM
+  port_id=$(openstack port create \
+    --network 3eb39e89-ac62-4b5b-a313-8d52482cc1f2 \
+    --fixed-ip subnet=e5db0db9-bf93-43f4-928a-e46e099fef9e \
+    --enable test-gpu-port-$i -f json | jq -r '.id')
+  echo "Created port: $port_id"
+
+  # Apply security groups to the port
+  openstack port set \
+    --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+    --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+    --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+    --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+    $port_id
+
+  # Create and associate a floating IP
+  openstack floating ip create -f json \
+    --subnet e33be8b2-02e2-41a5-87b5-830ba5d0db7a \
+    --port $port_id pro-net-vlan1162 > /dev/null
+  echo "Floating IP created for GPU VM $i"
+
+  # Create server using GPU flavor and existing volume
+  openstack server create \
+    --flavor m8g.xlarge \
+    --volume $VOLUME_ID \
+    --security-group b3455868-8842-4b16-9f35-684e25f25f28 \
+    --security-group 1320ddfd-e090-4300-8d9c-c0d10dfaf84b \
+    --security-group c741134d-43d3-4419-bb55-ba6e60bead75 \
+    --security-group 58269c3b-bd2d-4287-aedc-2e2f2c744c19 \
+    --port $port_id \
+    --key-name c30-drm-keypair \
+    --wait test-gpu-vm-$i
+
+  echo "✅ GPU VM $i created successfully"
+done
+
