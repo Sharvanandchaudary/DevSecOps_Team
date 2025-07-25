@@ -1,19 +1,17 @@
-
 Daily Status Report
 
 Work Done Today
 
-Tested the updated image which was created with a new device name and received an assigned IP, but during deployment the image was not able to download.
-On the iDRAC console we observed the following repeating message from the ironic‑python‑agent:
-ironic_python_agent.extensions.standby [-] Attempting to download image from http://<image_server> ... heartbeat successful
-The deploy process did not complete and the instance remained in a build state.
-Faced an issue while running the packer workflow as the branch used was a new one and there were protection rules. Raised an IT ticket for the required permissions and added the necessary updates to proceed.
-Reviewed the image in iDRAC and worked with Abhishek to create a new image containing an EFI partition as referenced in the official documentation.
-This image will be tested tomorrow and results will be updated accordingly.
-The image creation process was challenging because I have not previously worked much on the OS side. I will continue debugging with the new EFI‑partitioned image 
+Tested the image with EFI boot in the dev environment, but it was not able to boot the VM.
+
+The Packer workflow is also failing because of this issue. I conveyed this concern to Abhishek, as this was a customized image, but it does include the EFI partition.
+
+Performed host aggregate testing for GPU. Initially faced an issue as the available cores were low. Later, deleted some servers that were not in use and also deleted some previously created volumes to free up resources.
+
+Verified that the host aggregate was correctly set in the flavor. We were able to provision VMs on the correct aggregate, and tested successfully with 10 VMs which were properly provisioned on GPU nodes.
 
 Plan for Tomorrow
-Test the new EFI‑partitioned image with Ironic.
-Arul assigned  me to take tasks from Varsha related to chamber deployments tomorrow. I will make sure to assign the relevant tickets and help in chamber deployments.
-Continue to support chamber deployments and customer support tasks as needed.
 
+Will have a call with Sourav to take inputs on Jira cloud3‑1507 regarding cloud environment portal CI/CD automation and start that work.
+
+For the image issue, I will follow up with Abhishek as I am not sure why it was not able to boot even though it has an EFI partition.
