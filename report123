@@ -3,15 +3,10 @@ Daily Status Report
 Work Done Today
 
 Tested the image with EFI boot in the dev environment, but it was not able to boot the VM.
-
 The Packer workflow is also failing because of this issue. I conveyed this concern to Abhishek, as this was a customized image, but it does include the EFI partition.
-
 Performed host aggregate testing for GPU. Initially faced an issue as the available cores were low. Later, deleted some servers that were not in use and also deleted some previously created volumes to free up resources.
-
 Verified that the host aggregate was correctly set in the flavor. We were able to provision VMs on the correct aggregate, and tested successfully with 10 VMs which were properly provisioned on GPU nodes.
 
 Plan for Tomorrow
-
 Will have a call with Sourav to take inputs on Jira cloud3‑1507 regarding cloud environment portal CI/CD automation and start that work.
-
 For the image issue, I will follow up with Abhishek as I am not sure why it was not able to boot even though it has an EFI partition.
