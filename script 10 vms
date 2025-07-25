@@ -312,30 +312,41 @@ chmod +x create_10_highmem_vms.sh
 ✅ How to verify host placement
 After the script finishes:
 
-bash
-Copy
-Edit
-for i in $(seq -w 1 10); do
-  echo "VM $i host placement:"
-  openstack server show test-highmem-vm-$i -f value -c OS-EXT-SRV-ATTR:host
-done
-✅ Expected output: all should show
-tst-overcloud-compute-01.openstack.cadence.com
 
-✅ Optional cleanup for highmem VMs
-When you want to delete them:
-
-bash
-Copy
-Edit
-for i in $(seq -w 1 10); do
-  openstack server delete test-highmem-vm-$i
-  openstack volume delete test-highmem-vol-$i
-  openstack port delete test-highmem-port-$i
-done
 Summary:
 ✔️ This script creates 10 high‑memory VMs (m1.large).
 ✔️ You already have a separate script for 10 low‑memory VMs (c2m4).
 ✔️ Both sets will be uniquely named and placed on their respective aggregates.
 
 If you want, I can also combine both into a single script or add logging. Let me know! 🚀
+
+
+
+volume c30-to-test-to-01-haproxy-volume
+ID
+60b80fac-0dd2-4c4e-a0dd-f161c7bb1b4a
+
+openstack flavor create m8g.xlarge --vcpus 8 --ram 32768 --disk 100
+openstack flavor set m8g.xlarge --property aggregate_instance_extra_specs:host_type=gpu_host
++--------------------------------------+---------------------+---------+------+-----------+-------+-----------+
+vsaravan@sjcvl-ghrunner1:~$ openstack flavor show m8g.xlarge
++----------------------------+-----------------------------------------------------+
+| Field                      | Value                                               |
++----------------------------+-----------------------------------------------------+
+| OS-FLV-DISABLED:disabled   | False                                               |
+| OS-FLV-EXT-DATA:ephemeral  | 0                                                   |
+| access_project_ids         | None                                                |
+| description                | None                                                |
+| disk                       | 100                                                 |
+| id                         | cf5037d3-f8ea-48fd-89a9-31f241633c33                |
+| name                       | m8g.xlarge                                          |
+| os-flavor-access:is_public | True                                                |
+| properties                 | aggregate_instance_extra_specs:host_type='gpu_host' |
+| ram                        | 32768                                               |
+| rxtx_factor                | 1.0                                                 |
+| swap                       | 0                                                   |
+| vcpus                      | 8                                                   |
++----------------------------+-----------------------------------------------------+
+vsaravan@sjcvl-ghrunner1:~$
+
+so create a script use above values for secutiyr groups ann all but the update the image name and flavor name 
