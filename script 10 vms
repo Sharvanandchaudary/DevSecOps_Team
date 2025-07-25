@@ -400,3 +400,203 @@ for i in $(seq -w 1 2); do
   echo "✅ GPU VM $i created successfully"
 done
 
+
+
+
+
+
+
+✅ Script: create_gpu_vms.sh
+bash
+Copy
+Edit
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+COUNT=2   # how many GPU VMs you want
+FLAVOR_ID="cf5037d3-f8ea-48fd-89a9-31f241633c33"        # m8g.xlarge
+IMAGE_ID="a2474995-b4f9-45b4-a2d9-48217b5c521e"          # your base image
+NETWORK_ID="3eb39e89-ac62-4b5b-a313-8d52482cc1f2"        # tn02 network
+SUBNET_ID="e5db0db9-bf93-43f4-928a-e46e099fef9e"
+FLOATING_SUBNET="e33be8b2-02e2-41a5-87b5-830ba5d0db7a"  # floating ip subnet
+SECURITY_GROUPS=(
+  "b3455868-8842-4b16-9f35-684e25f25f28"
+  "1320ddfd-e090-4300-8d9c-c0d10dfaf84b"
+  "c741134d-43d3-4419-bb55-ba6e60bead75"
+  "58269c3b-bd2d-4287-aedc-2e2f2c744c19"
+)
+KEY_NAME="c30-drm-keypair"
+VOLUME_SIZE=100 # size in GB
+
+# ===== LOOP =====
+for i in $(seq -w 1 $COUNT); do
+  echo "===== Creating GPU VM $i ====="
+
+  # Create port
+  PORT_NAME="gpu-port-$i"
+  port_id=$(openstack port create \
+    --network $NETWORK_ID \
+    --fixed-ip subnet=$SUBNET_ID \
+    --enable $PORT_NAME -f json | jq -r '.id')
+  echo "✅ Created port: $port_id"
+
+  # Attach security groups to port
+  for sg in "${SECURITY_GROUPS[@]}"; do
+    openstack port set --security-group $sg $port_id
+  done
+
+  # Create floating IP
+  openstack floating ip create -f json \
+    --subnet $FLOATING_SUBNET \
+    --port $port_id pro-net-vlan1162 > /dev/null
+  echo "✅ Floating IP created for GPU VM $i"
+
+  # Create new bootable volume from image
+  VOL_NAME="gpu-vol-$i"
+  volume_id=$(openstack volume create -f json \
+    --size $VOLUME_SIZE \
+    --bootable \
+    --image $IMAGE_ID \
+    $VOL_NAME | jq -r '.id')
+  echo "✅ Created volume: $volume_id"
+
+  # Wait for volume to be available
+  while true; do
+    status=$(openstack volume show $volume_id -f value -c status)
+    if [ "$status" = "available" ]; then
+      echo "✅ Volume $volume_id is available."
+      break
+    else
+      echo "⏳ Waiting for volume $volume_id..."
+      sleep 5
+    fi
+  done
+
+  # Create server
+  VM_NAME="gpu-vm-$i"
+  openstack server create \
+    --flavor $FLAVOR_ID \
+    --volume $volume_id \
+    $(for sg in "${SECURITY_GROUPS[@]}"; do echo --security-group $sg; done) \
+    --port $port_id \
+    --key-name $KEY_NAME \
+    --wait $VM_NAME
+
+  echo "🎉 GPU VM $i ($VM_NAME) created successfully!"
+done
+📌 How to use
+Save as create_gpu_vms.sh.
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x create_gpu_vms.sh
+Run:
+
+bash
+Copy
+Edit
+./create_gpu_vms.sh
+
+
+
+
+
+
+✅ Script: create_gpu_vms.sh
+bash
+Copy
+Edit
+#!/bin/bash
+set -e
+
+# ===== CONFIG =====
+COUNT=2   # how many GPU VMs you want
+FLAVOR_ID="cf5037d3-f8ea-48fd-89a9-31f241633c33"        # m8g.xlarge
+IMAGE_ID="a2474995-b4f9-45b4-a2d9-48217b5c521e"          # your base image
+NETWORK_ID="3eb39e89-ac62-4b5b-a313-8d52482cc1f2"        # tn02 network
+SUBNET_ID="e5db0db9-bf93-43f4-928a-e46e099fef9e"
+FLOATING_SUBNET="e33be8b2-02e2-41a5-87b5-830ba5d0db7a"  # floating ip subnet
+SECURITY_GROUPS=(
+  "b3455868-8842-4b16-9f35-684e25f25f28"
+  "1320ddfd-e090-4300-8d9c-c0d10dfaf84b"
+  "c741134d-43d3-4419-bb55-ba6e60bead75"
+  "58269c3b-bd2d-4287-aedc-2e2f2c744c19"
+)
+KEY_NAME="c30-drm-keypair"
+VOLUME_SIZE=100 # size in GB
+
+# ===== LOOP =====
+for i in $(seq -w 1 $COUNT); do
+  echo "===== Creating GPU VM $i ====="
+
+  # Create port
+  PORT_NAME="gpu-port-$i"
+  port_id=$(openstack port create \
+    --network $NETWORK_ID \
+    --fixed-ip subnet=$SUBNET_ID \
+    --enable $PORT_NAME -f json | jq -r '.id')
+  echo "✅ Created port: $port_id"
+
+  # Attach security groups to port
+  for sg in "${SECURITY_GROUPS[@]}"; do
+    openstack port set --security-group $sg $port_id
+  done
+
+  # Create floating IP
+  openstack floating ip create -f json \
+    --subnet $FLOATING_SUBNET \
+    --port $port_id pro-net-vlan1162 > /dev/null
+  echo "✅ Floating IP created for GPU VM $i"
+
+  # Create new bootable volume from image
+  VOL_NAME="gpu-vol-$i"
+  volume_id=$(openstack volume create -f json \
+    --size $VOLUME_SIZE \
+    --bootable \
+    --image $IMAGE_ID \
+    $VOL_NAME | jq -r '.id')
+  echo "✅ Created volume: $volume_id"
+
+  # Wait for volume to be available
+  while true; do
+    status=$(openstack volume show $volume_id -f value -c status)
+    if [ "$status" = "available" ]; then
+      echo "✅ Volume $volume_id is available."
+      break
+    else
+      echo "⏳ Waiting for volume $volume_id..."
+      sleep 5
+    fi
+  done
+
+  # Create server
+  VM_NAME="gpu-vm-$i"
+  openstack server create \
+    --flavor $FLAVOR_ID \
+    --volume $volume_id \
+    $(for sg in "${SECURITY_GROUPS[@]}"; do echo --security-group $sg; done) \
+    --port $port_id \
+    --key-name $KEY_NAME \
+    --wait $VM_NAME
+
+  echo "🎉 GPU VM $i ($VM_NAME) created successfully!"
+done
+📌 How to use
+Save as create_gpu_vms.sh.
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x create_gpu_vms.sh
+Run:
+
+bash
+Copy
+Edit
+./create_gpu_vms.sh
