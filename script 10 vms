@@ -600,3 +600,72 @@ bash
 Copy
 Edit
 ./create_gpu_vms.sh
+
+
+
+
+
+
+
+✅ Script to list all servers named test-gpu-vm and their hosts
+bash
+Copy
+Edit
+#!/bin/bash
+
+echo "===== Listing all VMs named test-gpu-vm and their hosts ====="
+
+# Get all server IDs or names that match exactly test-gpu-vm
+servers=$(openstack server list --name test-gpu-vm -f value -c ID -c Name | awk '{print $1}')
+
+if [ -z "$servers" ]; then
+  echo "No servers found with name test-gpu-vm."
+  exit 0
+fi
+
+for id in $servers; do
+    name=$(openstack server show $id -f value -c name)
+    host=$(openstack server show $id -f value -c OS-EXT-SRV-ATTR:host)
+    echo "VM: $name (ID: $id) is running on host: $host"
+done
+💡 How to run
+Save the above script as list_gpu_vm_hosts.sh.
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x list_gpu_vm_hosts.sh
+Run it:
+
+bash
+Copy
+Edit
+./list_gpu_vm_hosts.sh
+✅ What it does:
+
+Filters servers with the exact name test-gpu-vm.
+
+Loops through each and prints its host.
+
+If you want to match names starting with test-gpu-vm (in case you later have test-gpu-vm-1, etc.), just change the filter to:
+
+bash
+Copy
+Edit
+servers=$(openstack server list --name test-gpu-vm --long -f value -c ID -c Name | awk '{print $1}')
+or use a grep on the openstack server list.
+
+Let me know if you’d like me to tweak it for prefix matching! 🚀
+
+
+
+
+
+
+
+
+
+Ask ChatGPT
+
