@@ -1,12 +1,357 @@
-Daily Status Report
+I can see the error message clearly in your screenshot:
 
-Work Done Today
+csharp
+Copy
+Edit
+PCI alias gpu is not defined (HTTP 400)
+VM created successfully
+✅ What this means:
+You created a flavor with this property:
 
-Tested the image with EFI boot in the dev environment, but it was not able to boot the VM.
-The Packer workflow is also failing because of this issue. I conveyed this concern to Abhishek, as this was a customized image, but it does include the EFI partition.
-Performed host aggregate testing for GPU. Initially faced an issue as the available cores were low. Later, deleted some servers that were not in use and also deleted some previously created volumes to free up resources.
-Verified that the host aggregate was correctly set in the flavor. We were able to provision VMs on the correct aggregate, and tested successfully with 10 VMs which were properly provisioned on GPU nodes.
+vbnet
+Copy
+Edit
+pci_passthrough:alias=gpu:2
+…but OpenStack is telling you:
 
-Plan for Tomorrow
-Will have a call with Sourav to take inputs on Jira cloud3‑1507 regarding cloud environment portal CI/CD automation and start that work.
-For the image issue, I will follow up with Abhishek as I am not sure why it was not able to boot even though it has an EFI partition.
+csharp
+Copy
+Edit
+PCI alias gpu is not defined
+💡 Why this happens
+Before you can use pci_passthrough:alias=gpu:2, your OpenStack controller must have a PCI alias defined in the Nova configuration (nova.conf).
+That alias (gpu) maps to actual physical GPU PCI devices on your compute hosts.
+
+For example, in /etc/nova/nova.conf on your compute node(s) you should have something like:
+
+ini
+Copy
+Edit
+[pci]
+alias = { "vendor_id":"10de", "product_id":"1db6", "device_type":"type-PCI", "name":"gpu" }
+(The vendor/product IDs should match your GPU hardware — e.g., NVIDIA Tesla or A100 cards.)
+
+After setting this, you must restart nova-compute service:
+
+bash
+Copy
+Edit
+sudo systemctl restart openstack-nova-compute
+Only then will OpenStack recognize the alias gpu and allow flavors that request it.
+
+🔧 Steps to fix
+Check GPU alias definition:
+On the GPU compute node:
+
+bash
+Copy
+Edit
+sudo grep -i alias /etc/nova/nova.conf
+If nothing is returned, then alias gpu is not defined.
+
+Add a GPU PCI alias to nova.conf:
+Edit /etc/nova/nova.conf:
+
+ini
+Copy
+Edit
+[pci]
+alias = { "vendor_id":"10de", "product_id":"1db6", "device_type":"type-PCI", "name":"gpu" }
+Replace vendor_id and product_id with your GPU’s IDs:
+
+bash
+Copy
+Edit
+lspci -nn | grep -i nvidia
+(You’ll see something like [10de:1db6], where 10de is vendor, 1db6 is product.)
+
+Restart nova services:
+
+bash
+Copy
+Edit
+sudo systemctl restart openstack-nova-compute
+Verify alias:
+
+bash
+Copy
+Edit
+openstack hypervisor show <your-gpu-host>
+Make sure GPU devices are listed under PCI stats.
+
+Re-create or use the same flavor with:
+
+bash
+Copy
+Edit
+openstack flavor create m8g.multi --vcpus 16 --ram 65536 --disk 200
+openstack flavor set m8g.multi --property "pci_passthrough:alias"="gpu:2"
+openstack flavor set m8g.multi --property "aggregate_instance_extra_specs:host_type"="gpu_host"
+Boot your VM with that flavor again.
+
+✨ Summary
+The error is because your OpenStack environment hasn’t defined a GPU PCI alias in nova.conf.
+✅ Add alias in nova.conf
+✅ Restart nova-compute
+✅ Then use your flavor with pci_passthrough:alias=gpu:2
+
+If you’d like, I can help you write the exact alias JSON for your GPU once you share your lspci -nn | grep -i nvidia output. Let me know! 🚀
+
+
+
+
+
+
+
+
+You said:
+For cuda testing can you script for installing drivers and testing the vm is using gpup
+
+
+ChatGPT said:
+Absolutely!
+Below is a ready-to-use bash script that you can run inside your GPU VM to:
+
+✅ Install NVIDIA GPU drivers and CUDA toolkit
+✅ Install NVIDIA utility packages (nvidia-smi)
+✅ Verify that GPU is detected and CUDA works
+
+🚀 Script: setup_gpu_cuda.sh
+bash
+Copy
+Edit
+#!/bin/bash
+set -e
+
+echo "[INFO] Updating package lists..."
+sudo dnf clean all
+sudo dnf -y update
+
+echo "[INFO] Installing kernel headers and development tools..."
+sudo dnf -y groupinstall "Development Tools"
+sudo dnf -y install kernel-devel-$(uname -r) kernel-headers-$(uname -r) epel-release dkms
+
+echo "[INFO] Installing NVIDIA driver repository..."
+# Add the NVIDIA CUDA repo (for RHEL 9.x)
+sudo dnf config-manager --add-repo=https://developer.download.nvidia.com/compute/cuda/repos/rhel9/x86_64/cuda-rhel9.repo
+
+echo "[INFO] Installing NVIDIA driver and CUDA toolkit..."
+sudo dnf -y install nvidia-driver nvidia-settings cuda
+
+echo "[INFO] Adding NVIDIA persistence daemon..."
+sudo systemctl enable nvidia-persistenced
+sudo systemctl start nvidia-persistenced
+
+echo "[INFO] Reboot is recommended after driver install, but continuing..."
+
+echo "[INFO] Testing GPU detection with nvidia-smi..."
+nvidia-smi || { echo "[ERROR] nvidia-smi not working!"; exit 1; }
+
+echo "[INFO] Testing CUDA sample program..."
+# Install CUDA samples
+CUDA_SAMPLES_DIR=$HOME/NVIDIA_CUDA-$(date +%s)
+mkdir -p $CUDA_SAMPLES_DIR
+cp -r /usr/local/cuda/samples/* $CUDA_SAMPLES_DIR
+cd $CUDA_SAMPLES_DIR/1_Utilities/deviceQuery
+
+echo "[INFO] Building CUDA sample (deviceQuery)..."
+make
+
+echo "[INFO] Running CUDA sample (deviceQuery)..."
+./deviceQuery
+
+echo "[SUCCESS] CUDA test completed. Look above for GPU details."
+✅ How to use
+Copy this script into your VM, for example:
+
+bash
+Copy
+Edit
+nano setup_gpu_cuda.sh
+Paste the script and save.
+
+Make it executable:
+
+bash
+Copy
+Edit
+chmod +x setup_gpu_cuda.sh
+Run it:
+
+bash
+Copy
+Edit
+./setup_gpu_cuda.sh | tee gpu_setup.log
+Watch output:
+
+nvidia-smi should show your GPU(s).
+
+deviceQuery should print GPU details, CUDA cores, etc.
+
+📌 Notes
+Your VM must be created with the GPU flavor (with PCI passthrough alias properly configured).
+
+Make sure you reboot the VM after driver installation if CUDA toolkit isn’t detected immediately.
+
+This script is tailored for RHEL 9.x (as in your screenshot) – if using Ubuntu, let me know and I’ll give you a deb-based version.
+
+If you’d like, I can also provide:
+✅ A version for Ubuntu
+✅ A cleanup script
+✅ Or a quick test Python script (using PyTorch/TensorFlow) to confirm GPU utilization.
+
+Let me know! 🚀
+
+
+
+
+
+
+
+
+You said:
+so after ssh into vm we need to run thsi scriot
+
+
+ChatGPT said:
+✅ Yes! Exactly.
+Once you have successfully SSH’d into your GPU‑enabled VM (with the correct keypair), you simply run the script from inside the VM.
+
+🔑 Step‑by‑Step
+SSH into your VM:
+
+bash
+Copy
+Edit
+ssh -i <your-keypair.pem> cloud-user@<your-vm-ip>
+(Replace cloud-user with your actual username if different, and <your-vm-ip> with the VM’s floating IP.)
+
+Copy or create the script inside the VM:
+For example, on the VM:
+
+bash
+Copy
+Edit
+nano setup_gpu_cuda.sh
+Paste the script I gave you, save it, and exit.
+
+Make the script executable:
+
+bash
+Copy
+Edit
+chmod +x setup_gpu_cuda.sh
+Run the script (this will install drivers and test CUDA):
+
+bash
+Copy
+Edit
+./setup_gpu_cuda.sh | tee gpu_setup.log
+This will:
+
+Install NVIDIA drivers
+
+Install CUDA toolkit
+
+Run nvidia-smi to confirm GPU detection
+
+Compile and run CUDA’s deviceQuery sample to confirm CUDA works
+
+📌 After running:
+✅ You should see your GPU(s) listed by nvidia-smi
+✅ deviceQuery should output detailed GPU info (CUDA cores, memory, etc.)
+
+If you want, I can also:
+
+Help you test with a real CUDA workload (e.g., a PyTorch training script)
+
+Provide instructions for Ubuntu/Debian instead of RHEL
+
+Help troubleshoot if the script shows errors
+
+Just let me know! 🚀
+
+
+
+
+
+
+
+
+You said:
+ m8g.xlarge is om gou node how to check woth openstack commnds that it was using gpu
+
+
+ChatGPT said:
+Here’s exactly how you can check from your OpenStack CLI whether your running VM (for example created with m8g.xlarge flavor) is actually using the GPU node and is GPU‑capable.
+
+✅ 1. Find the server ID
+List your servers and pick the test-gpu-vm (or whatever you named it):
+
+bash
+Copy
+Edit
+openstack server list
+Note the ID of your VM.
+
+✅ 2. Check which host the VM is on
+bash
+Copy
+Edit
+openstack server show <SERVER_ID> -f value -c OS-EXT-SRV-ATTR:host
+✅ Output should show something like:
+
+Copy
+Edit
+tst-overcloud-compute-gpu-09.openstack.cadence.com
+If the hostname includes your GPU node (e.g., gpu in the name or the one you know is in the GPU aggregate), then it’s scheduled on the GPU host.
+
+✅ 3. Check flavor properties (optional)
+Confirm the flavor you used has the GPU passthrough alias:
+
+bash
+Copy
+Edit
+openstack flavor show m8g.xlarge
+Look under properties:
+
+vbnet
+Copy
+Edit
+aggregate_instance_extra_specs:host_type='gpu_host'
+pci_passthrough:alias='gpu:1'
+✅ 4. Inspect the hypervisor (optional deeper check)
+Get the hypervisor details of that host:
+
+bash
+Copy
+Edit
+openstack hypervisor show <HOSTNAME>
+It will show CPU, memory, and GPU info available on that hypervisor.
+(If SR‑IOV / PCI passthrough is set up, you will see PCI devices listed when using openstack hypervisor show or openstack hypervisor list then openstack hypervisor show <ID>.)
+
+✅ 5. Inside the VM – confirm CUDA devices
+Once you SSH into the VM and install NVIDIA drivers (or if your image already has them):
+
+bash
+Copy
+Edit
+nvidia-smi
+✅ This should list GPU(s) with name, memory, and utilization.
+
+🔥 Summary of commands
+bash
+Copy
+Edit
+# List all VMs
+openstack server list
+
+# Check which compute host the VM is running on
+openstack server show <SERVER_ID> -f value -c OS-EXT-SRV-ATTR:host
+
+# Check flavor properties
+openstack flavor show m8g.xlarge
+
+# Check hypervisor info (to confirm GPU host)
+openstack hypervisor show <HOSTNAME>
+👉 If you want, I can write a small script to do all of these checks automatically for your test-gpu-vm. Let me know! 🚀
