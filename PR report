@@ -1,3 +1,27 @@
+
+⸻
+
+Goal:
+Make the RHEL 8.6 image boot successfully on a bare metal instance.
+
+Work Done:
+	•	Verified and tested the RHEL 8.6 image thoroughly in a virtual environment.
+	•	Copied the finalized image into the target OpenStack environment.
+	•	Configured SSH access by injecting the required public keys and verified connectivity.
+	•	Ensured proper boot functionality — the image booted successfully on a Dell R660 bare metal server.
+	•	Resolved issues related to SSH login failure by debugging cloud-init and system configurations.
+	•	Addressed configuration mismatches that came with the default Red Hat ISO image — updated default settings to align with internal environment.
+	•	Validated that the image was using EFI boot and included correct partition layout.
+	•	Confirmed that the image could utilize full bare metal capacity (1.7TB disk, all CPUs, and memory) post-deployment.
+	•	Successfully provisioned the bare metal instance using Ironic and verified that it matched expected hardware specifications.
+	•	Deployed the instance in a test chamber and validated end-to-end SSH access and service readiness.
+
+
+
+
+
+
+
 GitHub Pull Request Branching Strategy (PR Perspective Only)
 Set up protected branch rules for main:
 
