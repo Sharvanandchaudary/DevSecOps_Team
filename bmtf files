@@ -186,3 +186,58 @@ resource "null_resource" "config_chef" {
 
 
 
+
+ame
+to01-wrk01-vm
+ID
+6409a1b4-5255-4cc1-9e36-d6368c032497
+Description
+to01-wrk01-vm
+Project ID
+59c2d928ef6046069a0175d74dc3dc23
+Status
+Error
+Locked
+False
+Availability Zone
+-
+Created
+Aug. 12, 2025, 3:24 a.m.
+Age
+0 minutes
+Fault
+Message
+No valid host was found.
+Code
+500
+Details
+Created
+Aug. 12, 2025, 3:24 a.m.
+Specs
+Flavor Name
+baremetal
+Flavor ID
+auto
+RAM
+1TB
+VCPUs
+128 VCPU
+Disk
+1787GB
+IP Addresses
+Security Groups
+Not available
+Metadata
+Key Name
+cloud30-default-kp
+Image Name
+cc-rhel86-baremetal-uefi
+Image ID
+4a31915b-213a-4173-97ad-a582c72ff9f2
+env
+test-2
+hyperscaler
+rhops
+Volumes Attached
+
+
