@@ -293,7 +293,132 @@ Ensure the network setup is valid for BM bring-up
 Do you want me to also give you a one-liner script that loops through all available nodes and prints only the relevant info so you don’t have to run node show for each manually? That would speed up debugging.
 
 
+vsaravan@sjcvl-ghrunner1:~$ openstack server delete 6409a1b4-5255-4cc1-9e36-d6368c032497
+vsaravan@sjcvl-ghrunner1:~$ openstack flavor show baremetal -f yaml
+OS-FLV-DISABLED:disabled: false
+OS-FLV-EXT-DATA:ephemeral: 0
+access_project_ids: null
+description: null
+disk: 1787
+id: auto
+name: baremetal
+os-flavor-access:is_public: true
+properties:
+  resources:CUSTOM_BAREMETAL_LARGE: '1'
+  resources:DISK_GB: '0'
+  resources:MEMORY_MB: '0'
+  resources:VCPU: '0'
+ram: 1048576
+rxtx_factor: 1.0
+swap: 0
+vcpus: 128
 
+
+
++------------------+------------------+---------------+-------------+--------------------+-------------+
+| UUID             | Name             | Instance UUID | Power State | Provisioning State | Maintenance |
++------------------+------------------+---------------+-------------+--------------------+-------------+
+| 16dec879-ba80-4c | baremetal-node-1 | None          | power off   | deploy failed      | False       |
+| ac-8486-59318d68 |                  |               |             |                    |             |
+| 8037             |                  |               |             |                    |             |
+vsaravan@sjcvl-ghrunner1:~$ openstack baremetal node show <NODE_UUID> -f yaml | egrep -i 'resource_class|traits'
+bash: NODE_UUID: No such file or directory
+vsaravan@sjcvl-ghrunner1:~$ openstack baremetal node list | grep UUID
+| UUID                                 | Name             | Instance UUID | Power State | Provisioning State | Maintenance |
+vsaravan@sjcvl-ghrunner1:~$ openstack baremetal node show UUID
+Node UUID could not be found. (HTTP 404)
+vsaravan@sjcvl-ghrunner1:~$ openstack baremetal node show  baremetal-node-1 | grep 16d
+| last_error             | Failed to prepare to deploy: No VIFs found for node 16dec879-ba80-4cac-8486-59318d688037 when attempting to update DHCP BOOT options.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| uuid                   | 16dec879-ba80-4cac-8486-59318d688037                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+vsaravan@sjcvl-ghrunner1:~$ openstack baremetal node show  16dec879-ba80-4cac-8486-59318d688037 -f yaml | egrep -i 'resource_class|traits'
+resource_class: BAREMETAL-LARGE
+traits: []
+vsaravan@sjcvl-ghrunner1:~$ openstack image show 4a31915b-213a-4173-97ad-a582c72ff9f2 -f yaml
+checksum: 158fd33211308ee4b59f0ad7d8a03ea1
+container_format: bare
+created_at: '2025-08-07T08:43:14Z'
+disk_format: qcow2
+file: /v2/images/4a31915b-213a-4173-97ad-a582c72ff9f2/file
+id: 4a31915b-213a-4173-97ad-a582c72ff9f2
+min_disk: 100
+min_ram: 0
+name: cc-rhel86-baremetal-uefi
+owner: 59c2d928ef6046069a0175d74dc3dc23
+properties:
+  os_hash_algo: sha512
+  os_hash_value: 935f0070e81342d1e60e8536c599975f0ec2b3d4c366e9fb4fa7fbbc2e0d11a1d0c287067cb15e47167058e0465ff9ac7eb6f2b7f5cd7b6c174506b17549a01f
+  os_hidden: false
+  stores: default_backend
+protected: false
+schema: /v2/schemas/image
+size: 6093275136
+status: active
+tags: []
+updated_at: '2025-08-07T08:45:04Z'
+virtual_size: 107374182400
+visibility: private
+vsaravan@sjcvl-ghrunner1:~$ openstack network show 5c79a1a8-b294-4435-a2e6-ef1b992735d3
++---------------------------+--------------------------------------+
+| Field                     | Value                                |
++---------------------------+--------------------------------------+
+| admin_state_up            | UP                                   |
+| availability_zone_hints   |                                      |
+| availability_zones        | nova                                 |
+| created_at                | 2024-11-19T22:11:41Z                 |
+| description               |                                      |
+| dns_domain                |                                      |
+| id                        | 5c79a1a8-b294-4435-a2e6-ef1b992735d3 |
+| ipv4_address_scope        | None                                 |
+| ipv6_address_scope        | None                                 |
+| is_default                | None                                 |
+| is_vlan_transparent       | None                                 |
+| l2_adjacency              | True                                 |
+| mtu                       | 1500                                 |
+| name                      | provisioning                         |
+| port_security_enabled     | True                                 |
+| project_id                | 334ca1da01cc4820b35c604cb37a5c1e     |
+| provider:network_type     | flat                                 |
+| provider:physical_network | baremetal                            |
+| provider:segmentation_id  | None                                 |
+| qos_policy_id             | None                                 |
+| revision_number           | 2                                    |
+| router:external           | Internal                             |
+| segments                  | None                                 |
+| shared                    | True                                 |
+| status                    | ACTIVE                               |
+| subnets                   | c83e54b1-822e-4931-ac73-b731d1f6c966 |
+| tags                      |                                      |
+| tenant_id                 | 334ca1da01cc4820b35c604cb37a5c1e     |
+| updated_at                | 2024-11-19T22:13:59Z                 |
++---------------------------+--------------------------------------+
+vsaravan@sjcvl-ghrunner1:~$ openstack subnet show  c83e54b1-822e-4931-ac73-b731d1f6c966
++----------------------+--------------------------------------+
+| Field                | Value                                |
++----------------------+--------------------------------------+
+| allocation_pools     | 10.107.177.40-10.107.177.99          |
+| cidr                 | 10.107.177.0/24                      |
+| created_at           | 2024-11-19T22:13:59Z                 |
+| description          |                                      |
+| dns_nameservers      |                                      |
+| dns_publish_fixed_ip | None                                 |
+| enable_dhcp          | True                                 |
+| gateway_ip           | 10.107.177.254                       |
+| host_routes          |                                      |
+| id                   | c83e54b1-822e-4931-ac73-b731d1f6c966 |
+| ip_version           | 4                                    |
+| ipv6_address_mode    | None                                 |
+| ipv6_ra_mode         | None                                 |
+| name                 | provisioning-subnet                  |
+| network_id           | 5c79a1a8-b294-4435-a2e6-ef1b992735d3 |
+| project_id           | 334ca1da01cc4820b35c604cb37a5c1e     |
+| revision_number      | 0                                    |
+| segment_id           | None                                 |
+| service_types        |                                      |
+| subnetpool_id        | None                                 |
+| tags                 |                                      |
+| updated_at           | 2024-11-19T22:13:59Z                 |
++----------------------+--------------------------------------+
+vsaravan@sjcvl-ghrunner1:~$
 
 
 
