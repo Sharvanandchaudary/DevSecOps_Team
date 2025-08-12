@@ -422,6 +422,85 @@ vsaravan@sjcvl-ghrunner1:~$
 
 
 
+1) Make sure the node is free (AVAILABLE)
+bash
+Copy
+Edit
+NODE="16dec879-ba80-4cac-8486-59318d688037"
 
-Ask ChatGPT
+openstack baremetal node show "$NODE" -f value -c provision_state -c last_error -c maintenance -c power_state
+
+# If NOT 'available', do a safe reset:
+openstack baremetal node maintenance set "$NODE" || true
+openstack baremetal node abort "$NODE" || true
+openstack baremetal node set "$NODE" --instance-info '{}' --instance-uuid "" || true
+for vif in $(openstack baremetal vif list "$NODE" -f value -c ID 2>/dev/null || true); do
+  openstack baremetal vif detach "$NODE" "$vif" || true
+done
+openstack baremetal node power off "$NODE" 2>/dev/null || true
+openstack baremetal node maintenance unset "$NODE" || true
+openstack baremetal node manage "$NODE" || true
+openstack baremetal node provide "$NODE" || true
+openstack baremetal node show "$NODE" -f value -c provision_state
+2) Find your tenant/data network (CIDR/VLAN from tfvars)
+bash
+Copy
+Edit
+# You said provider_cidr is 10.107.168.0/23 and VLAN is 1168
+openstack subnet list --long -f yaml | egrep -B2 -A5 'cidr: 10\.107\.168\.0/23|10\.107\.168'
+# Pick the right subnet id, then:
+TENANT_SUBNET_ID=<PUT_SUBNET_ID_HERE>
+TENANT_NET_ID=$(openstack subnet show "$TENANT_SUBNET_ID" -f value -c network_id)
+openstack network show "$TENANT_NET_ID" -f yaml | egrep -i 'name:|id:|provider:segmentation_id|provider:network_type|provider:physical_network|shared'
+3) Quick test boot using a baremetal tenant port
+bash
+Copy
+Edit
+SERVER="to01-wrk01-vm"
+IMG="4a31915b-213a-4173-97ad-a582c72ff9f2"
+FLAVOR="baremetal"
+KP="${OS_KEYPAIR}"
+
+# Create a BM-friendly tenant port
+openstack port create "${SERVER}-tenant-port" \
+  --network "$TENANT_NET_ID" \
+  --fixed-ip "subnet=${TENANT_SUBNET_ID}" \
+  --vnic-type baremetal \
+  --disable-port-security
+TENANT_PORT_ID=$(openstack port show "${SERVER}-tenant-port" -f value -c id)
+
+# Try image-boot once (keeps Cinder out of the equation for this test)
+openstack server create "$SERVER" \
+  --flavor "$FLAVOR" \
+  --image "$IMG" \
+  --nic "port-id=${TENANT_PORT_ID}" \
+  --key-name "$KP"
+
+# Watch it move out of ERROR/build:
+watch -n 3 'openstack server show to01-wrk01-vm -f value -c status'
+If that progresses (or at least avoids “No VIFs found”), we’ve proven the networking is the fix.
+
+4) (Optional) Clean the test, then run your script with the same IDs
+bash
+Copy
+Edit
+# If you want to re-run via your script instead:
+openstack server delete "$SERVER"; until ! openstack server show "$SERVER" &>/dev/null; do sleep 2; done
+openstack port delete "${SERVER}-tenant-port" || true
+
+# Export for your script so it uses tenant net (not provisioning)
+export BAREMETAL_NET_ID="$TENANT_NET_ID"
+export BAREMETAL_SUBNET_ID="$TENANT_SUBNET_ID"
+./deploy_baremetal_wrk01.sh
+If anything sticks, grab:
+
+bash
+Copy
+Edit
+openstack server show to01-wrk01-vm
+openstack server event list to01-wrk01-vm
+openstack console log show to01-wrk01-vm --lines 200
+openstack baremetal node show "$NODE" -f yaml | egrep -i 'provision_state|last_error'
+openstack baremetal vif list "$NODE"
+and I’ll pinpoint the next move.
 
