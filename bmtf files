@@ -241,3 +241,28 @@ rhops
 Volumes Attached
 
 
+Daily Status Report
+
+Goals:
+
+Resolve Neutron network deletion failure in baremetal deployment.
+
+Test Cadence standard image and run Packer builds.
+
+Implement baremetal deployment script for chamber environments.
+
+Work Done:
+
+Debugged Neutron error in baremetal deployment where network was not deleted.
+
+Worked with Wase and Abhishek to investigate; issue still unresolved, network needs manual deletion before retry.
+
+Imported Cadence standard image to dev environment and brought up an instance.
+
+Fixed SSH access by updating SSH settings and disabling cloud-init; rebooted multiple times to achieve successful login.
+
+Attempted Packer build on standard image; faced SSH timeout due to cloud-init issue.
+
+Started baremetal deployment script implementation; hit "No valid host found" error from scheduler.
+
+Verified volume creation and port attachment were successful; scheduler configuration needs review
