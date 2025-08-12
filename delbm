@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# Minimal baremetal bring-up (expects OS_* already sourced)
+# Auto-cleans volume/port/server on failure.
+
+set -euo pipefail
+[[ "${DEBUG:-0}" == "1" ]] && set -x
+
+# ======== Config you likely keep ========
+HYPERSCALER_TAG="rhops"
+ENVIRONMENT="test-2"
+NAME_PREFIX="to01"
+NODE_NAME="wrk01"
+SERVER_NAME="${NAME_PREFIX}-${NODE_NAME}-vm"
+
+WRK01_IMAGE_ID="4a31915b-213a-4173-97ad-a582c72ff9f2"
+WRK01_BOOT_SIZE_GB="100"
+WRK01_FLAVOR_NAME="baremetal"
+
+BAREMETAL_NET_ID="5c79a1a8-b294-4435-a2e6-ef1b992735d3"
+BAREMETAL_SUBNET_ID="c83e54b1-822e-4931-ac73-b731d1f6c966"
+
+OS_KEYPAIR="${OS_KEYPAIR:-cloud30-default-kp}"       # auto-created if missing
+PUB_KEY_FILE="${PUB_KEY_FILE:-$HOME/.ssh/id_rsa.pub}"
+
+WAIT_SEC_VOLUME="${WAIT_SEC_VOLUME:-900}"   # 15m
+WAIT_SEC_SERVER="${WAIT_SEC_SERVER:-1800}"  # 30m
+POLL_INTERVAL="${POLL_INTERVAL:-5}"
+
+BOOT_VOL_NAME="${SERVER_NAME}-root"
+BM_PORT_NAME="${SERVER_NAME}-bm-port"
+
+# ============ Logging ============
+RUN_ID="$(date +%Y%m%d-%H%M%S)"
+LOG_FILE="${LOG_FILE:-./deploy_${SERVER_NAME}_${RUN_ID}.log}"
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+# ============ State for cleanup ============
+VOL_ID=""
+PORT_ID=""
+SERVER_ID=""
+
+# ============ Helpers ============
+die(){ echo "ERROR: $*" >&2; exit 1; }
+require_cmd(){ command -v "$1" >/dev/null 2>&1 || die "Missing command: $1"; }
+
+wait_for_status(){
+  local cmd="$1" want="$2" timeout="$3" start status
+  start="$(date +%s)"
+  while true; do
+    status="$($cmd || true)"
+    [[ "$status" == "$want" ]] && return 0
+    (( $(date +%s) - start > timeout )) && { echo "Timeout waiting for $want (last: $status)"; return 1; }
+    sleep "$POLL_INTERVAL"
+  done
+}
+
+ensure_local_pubkey(){
+  if [[ ! -f "$PUB_KEY_FILE" ]]; then
+    echo "No $PUB_KEY_FILE — generating SSH keypair..."
+    mkdir -p "$HOME/.ssh"
+    ssh-keygen -t rsa -b 4096 -f "${PUB_KEY_FILE%.pub}" -N ""
+  fi
+}
+
+ensure_os_keypair(){
+  if ! openstack keypair list -f value -c Name | grep -qx "$OS_KEYPAIR"; then
+    echo "Creating OpenStack keypair '$OS_KEYPAIR' from $PUB_KEY_FILE ..."
+    openstack keypair create --public-key "$PUB_KEY_FILE" "$OS_KEYPAIR" >/dev/null
+  else
+    echo "Keypair '$OS_KEYPAIR' exists."
+  fi
+}
+
+cleanup(){
+  echo "--- cleanup starting ---"
+  # delete server if exists
+  if [[ -n "$SERVER_ID" ]] && openstack server show "$SERVER_ID" &>/dev/null; then
+    echo "Deleting server $SERVER_ID ..."
+    openstack server delete "$SERVER_ID" || true
+    # wait until gone
+    until ! openstack server show "$SERVER_ID" &>/dev/null; do sleep 3; done
+  fi
+
+  # delete port
+  if [[ -n "$PORT_ID" ]] && openstack port show "$PORT_ID" &>/dev/null; then
+    echo "Deleting port $PORT_ID ..."
+    openstack port delete "$PORT_ID" || true
+  fi
+
+  # detach (if somehow attached) and delete volume
+  if [[ -n "$VOL_ID" ]] && openstack volume show "$VOL_ID" &>/dev/null; then
+    echo "Deleting volume $VOL_ID ..."
+    openstack volume set --read-only False "$VOL_ID" 2>/dev/null || true
+    openstack volume delete "$VOL_ID" || true
+  fi
+  echo "--- cleanup done ---"
+}
+
+on_error(){
+  local rc=$?
+  echo "---- FAIL (rc=$rc). Last 80 log lines ----"
+  tail -n 80 "$LOG_FILE" || true
+  cleanup
+  exit $rc
+}
+trap on_error ERR
+
+# ============ Pre-flight ============
+require_cmd openstack
+require_cmd ssh-keygen
+
+openstack flavor show "$WRK01_FLAVOR_NAME" >/dev/null || die "Flavor '$WRK01_FLAVOR_NAME' not found"
+openstack image show  "$WRK01_IMAGE_ID"     >/dev/null || die "Image  '$WRK01_IMAGE_ID' not found"
+openstack network show "$BAREMETAL_NET_ID"  >/dev/null || die "Network '$BAREMETAL_NET_ID' not found"
+openstack subnet show  "$BAREMETAL_SUBNET_ID" >/dev/null || die "Subnet  '$BAREMETAL_SUBNET_ID' not found"
+
+ensure_local_pubkey
+ensure_os_keypair
+
+# ============ Cloud-init (minimal) ============
+USER_DATA_FILE="$(pwd)/${SERVER_NAME}_user_data.yaml"
+cat > "$USER_DATA_FILE" <<'YAML'
+#cloud-config
+package_update: true
+package_upgrade: false
+runcmd:
+  - echo "cloud-init completed" | tee /var/log/cloud-init-orchestrator.log
+YAML
+
+# ============ Volume ============
+echo "Creating boot volume $BOOT_VOL_NAME from image..."
+openstack volume create "$BOOT_VOL_NAME" \
+  --size "$WRK01_BOOT_SIZE_GB" \
+  --image "$WRK01_IMAGE_ID" >/dev/null
+VOL_ID="$(openstack volume show "$BOOT_VOL_NAME" -f value -c id)"
+echo "VOL_ID=$VOL_ID"
+echo "Waiting for volume to be available..."
+wait_for_status "openstack volume show $BOOT_VOL_NAME -f value -c status" "available" "$WAIT_SEC_VOLUME"
+
+# ============ Port ============
+echo "Creating baremetal port $BM_PORT_NAME ..."
+openstack port create "$BM_PORT_NAME" \
+  --network "$BAREMETAL_NET_ID" \
+  --fixed-ip "subnet=$BAREMETAL_SUBNET_ID" \
+  --disable-port-security >/dev/null
+PORT_ID="$(openstack port show "$BM_PORT_NAME" -f value -c id)"
+echo "PORT_ID=$PORT_ID"
+
+# ============ Server ============
+echo "Booting server $SERVER_NAME ..."
+SERVER_ID="$(
+  openstack server create "$SERVER_NAME" \
+    --flavor "$WRK01_FLAVOR_NAME" \
+    --volume "$BOOT_VOL_NAME" \
+    --nic "port-id=$PORT_ID" \
+    --key-name "$OS_KEYPAIR" \
+    --user-data "$USER_DATA_FILE" \
+    --property env="$ENVIRONMENT" \
+    --property hyperscaler="$HYPERSCALER_TAG" \
+    -f value -c id
+)"
+echo "SERVER_ID=$SERVER_ID"
+
+echo "Waiting for server ACTIVE..."
+wait_for_status "openstack server show $SERVER_ID -f value -c status" "ACTIVE" "$WAIT_SEC_SERVER"
+
+echo "=== SUCCESS ==="
+openstack server show "$SERVER_ID"
+echo "Log: $LOG_FILE"
