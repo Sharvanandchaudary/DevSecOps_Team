@@ -1,0 +1,188 @@
+module "baremetal-vm" {
+  for_each = {for node in local.baremetal_node_details : node.name => node}
+  source   = "git::https://github.cadence.com/IT/terraform-openstack-vm.git?ref=v1.2.3"
+
+  prefix        = local.cloud30_prefix
+  instance_name = each.value.name
+  legacyPrefix  = local.legacyPrefix
+  image_id      = each.value.image
+  volume_size   = each.value.volume_size != null ? each.value.volume_size : null
+  region        = var.openstack_region
+  flavor_name   = each.value.instance_type
+  floating_ip   = null
+
+  public_ssh_key     = local.securityObj.vm_ssh_pub_key
+  security_group_map = {}
+  additional_disks   = null != each.value.additional_volumes ? lookup(local.storageObj.ebs_volume_details, each.value.additional_volumes, {}) : {}
+  port               = {
+    network_id         = module.provider-network.network_id
+    subnet_id          = module.provider-network.subnets_data[local.provider_subnets[0].name].id
+    fixed_ip           = local.eni_subnet_mapping[each.value.eni_name].ip.public_ip
+    pool               = "false"
+    security_group_ids = [for sg in local.eni_port_sg_mapping[each.value.eni_name] : sg.id]
+  }
+
+  baremetal_port       = {
+    network_id         = local.networkingObj.baremetal.network_id
+    subnet_id          = local.networkingObj.baremetal.subnet_id
+    fixed_ip           = null
+    pool               = "false"
+    security_group_ids = []
+  }
+  tags = local.tags
+
+  user_data = base64encode(templatefile("user_data_copy.tftpl", {
+    node_name               = local.legacyPrefix == null ? format("%s-%s-%s", local.cloud30_prefix, each.value.name, "vm") : format("%s%s", local.legacyPrefix, each.value.name)
+    recipe_tar              = local.computeObj.compute_details.userdata_details.recipe_tar
+    orchestrator_home       = local.computeObj.compute_details.userdata_details.orchestrator_home,
+    env_relative_path       = var.env_dir
+    region                  = var.region,
+    mirror                  = local.computeObj.compute_details.userdata_details.mirror,
+    mirror_dir              = local.computeObj.compute_details.userdata_details.mirror_dir,
+    orchestrator_chef_dir   = local.computeObj.compute_details.userdata_details.chef_dir,
+    chef_solo_embedded_path = local.computeObj.compute_details.userdata_details.chef_solo_embedded_path,
+    orchestrator_log_path   = local.computeObj.compute_details.userdata_details.chef_log_path
+    chef_solo_path          = local.computeObj.compute_details.userdata_details.chef_solo_path
+    openstack_user          = var.swift_credentials.username
+    openstack_pass          = var.swift_credentials.password
+    openstack_auth_url      = var.openstack_auth_url
+    openstack_prj_id        = var.openstack_project_id
+    openstack_prj_name      = var.openstack_project_name
+    openstack_region        = var.openstack_region
+    openstack_user_domain   = var.openstack_user_domain_name
+    openstack_prj_domain    = var.openstack_project_domain_name
+    openstack_auth_version  = var.openstack_auth_version
+  }))
+
+  depends_on = [ null_resource.config_chef ]
+}
+
+
+resource "null_resource" "config_chef" {
+
+  triggers = {
+    always_run = timestamp()
+  }
+  provisioner "local-exec" {
+    command     = <<-EOT
+      ${local.settingsObj.local_env_details.python_version} main.py ${base64encode(templatefile("${path.module}/customer_base_config.tftpl", local.chef_settings))}
+    EOT
+    working_dir = "${path.module}/files/scripts/config_chef"
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{
+  "tags": {
+    "hyperscaler": "rhops"
+  },
+  "environment": "test-2",
+  "name_prefix": "to01",
+  "openstack_project_id": "59c2d928ef6046069a0175d74dc3dc23",
+  "openstack_project_name": "cc-test-oa-chm01-prj",
+  "release" : "v2.0.10",
+  "netapp_version": "2.0.1",
+  "settings": {
+    "hybrid_deployment": false,
+    "aws_chamber_tfstate_key": "cloud30-chambers/config/envs/non-prod/dev/dc01/terraform.tfstate",
+    "cc_chamber_json_s3_location": "s3://cadencecloud-mirrors-eu-central-1/projects/orchestrator/c30-cust/to01/awscbtb02slurm01/to01.json",
+    "cc_hub_tfstate_key": "cloud30-openstack-shr/config/envs/non-prod/qa/test-2/to00/terraform.tfstate",
+    "drm_cidr": "10.3.120.0/23",
+    "aws_admin_cidr": "10.3.64.0/27",
+    "aws_chamber_cidr": "10.3.66.0/23",
+    "openstack_mgmt_ip": "10.107.178.0/24"
+  },
+  "compute": {
+    "compute_details": {
+      "node_details": {
+        "ls01": {
+          "image": "71e5ed26-05bc-4e6e-b107-d1eb3ab65a7f",
+          "volume_size": 100,
+          "enabled" : false,
+          "additional_volumes" : "ls01_vol"
+          
+        },
+        "haproxy": {
+          "image": "fe8ba8c6-9c98-4f45-ba96-802ef7a37391",
+          "volume_size": 100,
+          "enabled" : false,
+          "additional_volumes" : null
+          
+        },
+        "wrk01": {
+          "name": "wrk01",
+          "instance_type": "baremetal",
+          "image": "4a31915b-213a-4173-97ad-a582c72ff9f2",
+          "volume_size": 100,
+          "additional_volumes": null,
+          "eni_name": "wrk01-eni"
+        }
+      }
+    }
+  },
+  "storage": {
+    "volume_type": "netapp_iscsi_enc",
+    "ebs_volume_details": {
+      "ls01_vol": {
+        "scratch": {
+          "disk": "tmp",
+          "volume_size": 100,
+          "device": "/dev/vdb"
+        }
+      }
+    }
+  },
+  "networking": {
+    "provider_vlan" : "1168",
+    "provider_cidr" : "10.107.168.0/23",
+    "baremetal" : {
+      "network_id": "5c79a1a8-b294-4435-a2e6-ef1b992735d3",
+      "subnet_id" : "c83e54b1-822e-4931-ac73-b731d1f6c966"
+    },
+    "customer_vpc": {
+      "cidr_block": "10.154.180.0/23"
+    },
+    "customer_eni_mapping": {
+      "haproxy-eni": {
+        "ip": {
+          "public_ip": "10.107.168.52",
+          "hostnum": 52
+        }
+      },
+      "wrk01-eni": {
+        "name": "wrk01-eni",
+        "subnet": "ComputeSubnet2a",
+        "security_groups": [
+          "Chm-AccessFromUtlSvr",
+          "PrivateSG",
+          "CLA-SG",
+          "Platform-SG"
+        ],
+        "ip": {
+          "private_ip" : "$${cc_chamber_internal_cidr}",
+          "public_ip"  : "$${cc_chamber_cidr}",
+          "hostnum" : 101
+        }
+      }
+    }
+  }
+}
+
+
+
