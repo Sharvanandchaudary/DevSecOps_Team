@@ -504,3 +504,79 @@ openstack baremetal node show "$NODE" -f yaml | egrep -i 'provision_state|last_e
 openstack baremetal vif list "$NODE"
 and I’ll pinpoint the next move.
 
+
+
+
+#!/usr/bin/env bash
+# reset_bm_node.sh — safely reset a failed Ironic baremetal node to AVAILABLE
+# Usage:
+#   ./reset_bm_node.sh <NODE_UUID> [SERVER_NAME]
+# Example:
+#   ./reset_bm_node.sh 16dec879-ba80-4cac-8486-59318d688037 to01-wrk01-vm
+
+set -euo pipefail
+
+NODE="${1:?Usage: $0 <NODE_UUID> [SERVER_NAME]}"
+SERVER="${2:-}"   # optional — if passed, we’ll delete this server first
+
+msg(){ echo -e "[$(date +'%F %T')] $*"; }
+
+# 0) If a server name is supplied, remove it (clears Nova binding first)
+if [[ -n "$SERVER" ]]; then
+  if openstack server show "$SERVER" &>/dev/null; then
+    msg "Deleting server: $SERVER"
+    openstack server delete "$SERVER" || true
+    until ! openstack server show "$SERVER" &>/dev/null; do
+      sleep 2
+    done
+    msg "Server removed."
+  else
+    msg "Server $SERVER not found (ok)."
+  fi
+fi
+
+# 1) Quarantine the node & abort any in-flight/failed workflow
+msg "Putting node in maintenance: $NODE"
+openstack baremetal node maintenance set "$NODE" || true
+
+msg "Aborting any active/failed deploy/clean on node"
+openstack baremetal node abort "$NODE" || true
+
+# 2) Clear instance bindings (safe even if already empty)
+msg "Clearing instance bindings"
+openstack baremetal node set "$NODE" --instance-info '{}' --instance-uuid "" || true
+
+# 3) Detach any Ironic-managed VIFs (best-effort; may require elevated perms)
+msg "Detaching any bound VIFs (best-effort)"
+if openstack baremetal vif list "$NODE" &>/dev/null; then
+  for vif in $(openstack baremetal vif list "$NODE" -f value -c ID); do
+    msg " Detach VIF $vif"
+    openstack baremetal vif detach "$NODE" "$vif" || true
+  done
+else
+  msg " baremetal vif list not permitted; skipping (ok)."
+fi
+
+# 4) Ensure power is OFF (some clouds require this for state transitions)
+msg "Powering off node (best-effort)"
+openstack baremetal node power off "$NODE" 2>/dev/null || true
+
+# 5) Bring node back to AVAILABLE
+msg "Unsetting maintenance"
+openstack baremetal node maintenance unset "$NODE" || true
+
+msg "Transitioning node -> manageable"
+openstack baremetal node manage "$NODE" || true
+
+msg "Transitioning node -> available"
+openstack baremetal node provide "$NODE" || true
+
+# 6) Wait until AVAILABLE and print final state summary
+msg "Waiting for node to reach 'available'..."
+until [[ "$(openstack baremetal node show "$NODE" -f value -c provision_state)" == "available" ]]; do
+  sleep 2
+done
+
+msg "Node is AVAILABLE. Final state:"
+openstack baremetal node show "$NODE" -f yaml | egrep -i 'provision_state|last_error|maintenance|power_state|instance_uuid' || true
+
